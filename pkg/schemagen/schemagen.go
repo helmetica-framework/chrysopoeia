@@ -19,15 +19,21 @@ const CRDListKindAnnotation = "crd.bundle.appcat.io/listKind"
 const CRDSingularAnnotation = "crd.bundle.appcat.io/singular"
 const CRDPluralAnnotation = "crd.bundle.appcat.io/plural"
 
-// GenerateCRD generates a CustomResourceDefinition from a Helm chart.
+// GenerateCRD generates a [apiextv1.CustomResourceDefinition] from a Helm chart.
 // The CRD is generated based on the chart's values.yaml file and annotations.
+//
 // Use the following annotations in the chart's metadata to customize the CRD:
-// - [CRDKindAnnotation]: The kind of the CRD. Defaults to "Instance".
-// - [CRDListKindAnnotation]: The list kind of the CRD. Defaults to empty.
-// - [CRDSingularAnnotation]: The singular name of the CRD. Defaults to empty.
-// - [CRDPluralAnnotation]: The plural name of the CRD. Defaults to lowercase kind + "s".
+//
+//   - [CRDKindAnnotation]: The kind of the CRD. Defaults to "Instance".
+//   - [CRDListKindAnnotation]: The list kind of the CRD. Defaults to empty.
+//   - [CRDSingularAnnotation]: The singular name of the CRD. Defaults to empty.
+//   - [CRDPluralAnnotation]: The plural name of the CRD. Defaults to lowercase kind + "s".
+//
 // The generated CRD is namespace-scoped.
 // The CRD's group is derived from the chart's version and name, in the format "v<major>.<chart-name>.bundles.appcat.io".
+//
+// Warning: Currently all untagged null values in the values.yaml file are assumed to be strings.
+// This may lead to incorrect schema generation for fields that are actually of a different type.
 func GenerateCRD(chart chartv2.Chart) (apiextv1.CustomResourceDefinition, error) {
 	var valuesYaml []byte
 	for _, f := range chart.Raw {
