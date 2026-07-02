@@ -1,0 +1,256 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: juiceshops.v3.juiceshop.bundles.appcat.io
+spec:
+  group: v3.juiceshop.bundles.appcat.io
+  names:
+    kind: JuiceShop
+    listKind: JuiceShopList
+    plural: juiceshops
+    singular: juiceshop
+  scope: Namespaced
+  versions:
+  - name: bundle
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            description: Configures the desired state of the service.
+            properties:
+              desiredRevision:
+                description: The desired revision of the service.
+                type: string
+              values:
+                description: This field together with the `.spec.version` field defines
+                  the configuration of the service. Every change to either of these
+                  two fields creates a new revision of the service.
+                properties:
+                  affinity:
+                    type: object
+                  autoscaling:
+                    description: 'This section is for setting up autoscaling more
+                      information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/'
+                    properties:
+                      enabled:
+                        type: boolean
+                      maxReplicas:
+                        type: integer
+                      minReplicas:
+                        type: integer
+                      targetCPUUtilizationPercentage:
+                        type: integer
+                    type: object
+                  fullnameOverride:
+                    type: string
+                  httpRoute:
+                    description: |-
+                      -- Expose the service via gateway-api HTTPRoute
+                      Requires Gateway API resources and suitable controller installed within the cluster
+                      (see: https://gateway-api.sigs.k8s.io/guides/)
+                    properties:
+                      annotations:
+                        description: HTTPRoute annotations.
+                        type: object
+                      enabled:
+                        description: HTTPRoute enabled.
+                        type: boolean
+                      hostnames:
+                        description: Hostnames matching HTTP header.
+                        items:
+                          type: string
+                        type: array
+                      parentRefs:
+                        description: Which Gateways this Route is attached to.
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            sectionName:
+                              type: string
+                          type: object
+                        type: array
+                      rules:
+                        description: List of rules and filters applied.
+                        items:
+                          properties:
+                            matches:
+                              items:
+                                properties:
+                                  path:
+                                    properties:
+                                      type:
+                                        type: string
+                                      value:
+                                        type: string
+                                    type: object
+                                type: object
+                              type: array
+                          type: object
+                        type: array
+                    type: object
+                  image:
+                    description: 'This sets the container image more information can
+                      be found here: https://kubernetes.io/docs/concepts/containers/images/'
+                    properties:
+                      pullPolicy:
+                        description: This sets the pull policy for images.
+                        type: string
+                      repository:
+                        type: string
+                      tag:
+                        description: Overrides the image tag whose default is the
+                          chart appVersion.
+                        type: string
+                    type: object
+                  imagePullSecrets:
+                    description: 'This is for the secrets for pulling an image from
+                      a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/'
+                    items:
+                      type: string
+                    type: array
+                  ingress:
+                    description: 'This block is for setting up the ingress for more
+                      information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/'
+                    properties:
+                      annotations:
+                        type: object
+                      className:
+                        type: string
+                      enabled:
+                        type: boolean
+                      hosts:
+                        description: |-
+                          kubernetes.io/ingress.class: nginx
+                          kubernetes.io/tls-acme: "true"
+                        items:
+                          properties:
+                            host:
+                              type: string
+                            paths:
+                              items:
+                                properties:
+                                  path:
+                                    type: string
+                                  pathType:
+                                    type: string
+                                type: object
+                              type: array
+                          type: object
+                        type: array
+                      tls:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  livenessProbe:
+                    description: 'This is to setup the liveness and readiness probes
+                      more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/'
+                    properties:
+                      httpGet:
+                        properties:
+                          path:
+                            type: string
+                          port:
+                            type: string
+                        type: object
+                    type: object
+                  nameOverride:
+                    description: This is to override the chart name.
+                    type: string
+                  nodeSelector:
+                    type: object
+                  podAnnotations:
+                    description: |-
+                      This is for setting Kubernetes Annotations to a Pod.
+                      For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+                    type: object
+                  podLabels:
+                    description: |-
+                      This is for setting Kubernetes Labels to a Pod.
+                      For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+                    type: object
+                  podSecurityContext:
+                    type: object
+                  readinessProbe:
+                    properties:
+                      httpGet:
+                        properties:
+                          path:
+                            type: string
+                          port:
+                            type: string
+                        type: object
+                    type: object
+                  replicaCount:
+                    description: 'This will set the replicaset count more information
+                      can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/'
+                    type: integer
+                  resources:
+                    type: object
+                  securityContext:
+                    type: object
+                  service:
+                    description: 'This is for setting up a service more information
+                      can be found here: https://kubernetes.io/docs/concepts/services-networking/service/'
+                    properties:
+                      port:
+                        description: 'This sets the ports more information can be
+                          found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports'
+                        type: integer
+                      type:
+                        description: 'This sets the service type more information
+                          can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types'
+                        type: string
+                    type: object
+                  serviceAccount:
+                    description: 'This section builds out the service account more
+                      information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/'
+                    properties:
+                      annotations:
+                        description: Annotations to add to the service account.
+                        type: object
+                      automount:
+                        description: Automatically mount a ServiceAccount's API credentials?
+                        type: boolean
+                      create:
+                        description: Specifies whether a service account should be
+                          created.
+                        type: boolean
+                      name:
+                        description: |-
+                          The name of the service account to use.
+                          If not set and create is true, a name is generated using the fullname template.
+                        type: string
+                    type: object
+                  tolerations:
+                    items:
+                      type: string
+                    type: array
+                  volumeMounts:
+                    description: Additional volumeMounts on the output Deployment
+                      definition.
+                    items:
+                      type: string
+                    type: array
+                  volumes:
+                    description: Additional volumes on the output Deployment definition.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              version:
+                description: The version of the service. Every change to this field
+                  together with the `.spec.values` field creates a new revision of
+                  the service.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null
