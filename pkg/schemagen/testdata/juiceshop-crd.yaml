@@ -225,7 +225,14 @@ spec:
                     type: object
                   tolerations:
                     items:
-                      type: string
+                      properties:
+                        effect:
+                          type: string
+                        key:
+                          type: string
+                        operator:
+                          type: string
+                      type: object
                     type: array
                   volumeMounts:
                     description: Additional volumeMounts on the output Deployment

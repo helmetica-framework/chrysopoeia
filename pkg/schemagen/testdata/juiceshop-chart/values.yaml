@@ -156,6 +156,9 @@ volumeMounts: []
 
 nodeSelector: {}
 
-tolerations: []
+tolerations:
+- key: ""
+  operator: "Exists"
+  effect: "NoSchedule"
 
 affinity: {}

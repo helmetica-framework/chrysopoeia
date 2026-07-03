@@ -1,0 +1,23 @@
+# This key won't be changed
+replicaCount: 1
+
+# Updated description for the image repository
+image:
+  # New description for the image repository
+  repository: juice-shop
+  # This will be changed to a different value
+  pullPolicy: Always
+
+config:
+  server:
+    port: http
+
+inArray:
+  - name: item1
+    value: "asd"
+
+arrayWithAddedItem:
+  - name: item1
+    value: 1
+  - name: item2
+    value: 2

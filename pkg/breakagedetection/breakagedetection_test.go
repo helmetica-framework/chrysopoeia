@@ -1,32 +1,20 @@
 package breakagedetection_test
 
 import (
-	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/helmetica-framework/chrysopoeia/pkg/breakagedetection"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"sigs.k8s.io/yaml"
+
+	"github.com/helmetica-framework/chrysopoeia/pkg/breakagedetection"
+	"github.com/helmetica-framework/chrysopoeia/pkg/schemagen"
 )
 
 func TestCheck(t *testing.T) {
-	originalCRDYAML, err := os.ReadFile("testdata/crd.orig.yaml")
-	if err != nil {
-		t.Fatalf("Failed to read original CRD YAML: %v", err)
-	}
-	updatedCRDYAML, err := os.ReadFile("testdata/crd.updated.yaml")
-	if err != nil {
-		t.Fatalf("Failed to read updated CRD YAML: %v", err)
-	}
-
-	var original, updated apiextv1.CustomResourceDefinition
-	if err := yaml.Unmarshal(originalCRDYAML, &original); err != nil {
-		t.Fatalf("Failed to unmarshal original CRD YAML: %v", err)
-	}
-	if err := yaml.Unmarshal(updatedCRDYAML, &updated); err != nil {
-		t.Fatalf("Failed to unmarshal updated CRD YAML: %v", err)
-	}
+	original := crdFromChart(t, "juiceshop-original")
+	updated := crdFromChart(t, "juiceshop-updated")
 
 	t.Run("Original to Updated", func(t *testing.T) {
 		warnings, errors := breakagedetection.Check(original, updated)
@@ -47,4 +35,20 @@ func TestCheck(t *testing.T) {
 			t.Errorf("Breakage detection warnings: \n%s", strings.Join(warnings, "\n"))
 		}
 	})
+}
+
+func crdFromChart(t *testing.T, name string) apiextv1.CustomResourceDefinition {
+	loader, err := loader.Loader(filepath.Join(".", "testdata", name))
+	if err != nil {
+		t.Fatalf("Failed to create loader for chart %s: %v", name, err)
+	}
+	chart, err := loader.Load()
+	if err != nil {
+		t.Fatalf("Failed to load chart %s: %v", name, err)
+	}
+	crd, err := schemagen.GenerateCRD(*chart)
+	if err != nil {
+		t.Fatalf("Failed to generate CRD from chart %s: %v", name, err)
+	}
+	return crd
 }
