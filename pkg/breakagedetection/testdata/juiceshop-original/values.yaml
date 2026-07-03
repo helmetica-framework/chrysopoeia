@@ -11,6 +11,11 @@ config:
   server:
     port: 3000
 
+emptyArray: []
+emptyArrayWithAddedType: []
+emptyObject: {}
+
+
 inArray:
   - name: item1
     value: 1
@@ -18,3 +23,7 @@ inArray:
 arrayWithAddedItem:
   - name: item1
     value: 1
+
+removedKey: "Some value"
+
+nulledKeyButKeepsType: "Some value"

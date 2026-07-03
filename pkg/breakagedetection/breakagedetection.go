@@ -70,6 +70,7 @@ func checkSchemaProperties(path []string, original, updated apiextv1.JSONSchemaP
 		errors = append(errors, fmt.Sprintf("%s: Type has changed from %s to %s", joinPath(path), original.Type, updated.Type))
 		return warnings, errors
 	}
+
 	for propName, prop := range original.Properties {
 		updatedProp, ok := updated.Properties[propName]
 		if !ok {
@@ -95,6 +96,7 @@ func checkSchemaProperties(path []string, original, updated apiextv1.JSONSchemaP
 		updatedItems = append(updatedItems, updated.Items.JSONSchemas...)
 	}
 	if len(origItems) != len(updatedItems) {
+		// len(1) means array with a single schema, len(>1) means tuple with multiple schemas
 		errors = append(errors, fmt.Sprintf("%s: Number of items has changed from %d to %d", joinPath(path), len(origItems), len(updatedItems)))
 		return warnings, errors
 	}

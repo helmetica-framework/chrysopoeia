@@ -12,6 +12,10 @@ config:
   server:
     port: http
 
+emptyArray: []
+emptyArrayWithAddedType: [true]
+emptyObject: {}
+
 inArray:
   - name: item1
     value: "asd"
@@ -21,3 +25,5 @@ arrayWithAddedItem:
     value: 1
   - name: item2
     value: 2
+
+nulledKeyButKeepsType: !!str
