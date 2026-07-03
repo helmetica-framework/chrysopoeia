@@ -7,7 +7,7 @@ rules:
 - apiGroups:
   - chrysopoeia.io
   resources:
-  - bundlesources
+  - customresourcedefinitionsources
   verbs:
   - get
   - list

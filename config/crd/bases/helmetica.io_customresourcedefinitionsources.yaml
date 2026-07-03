@@ -4,20 +4,21 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: bundlesources.helmetica.io
+  name: customresourcedefinitionsources.helmetica.io
 spec:
   group: helmetica.io
   names:
-    kind: BundleSource
-    listKind: BundleSourceList
-    plural: bundlesources
-    singular: bundlesource
+    kind: CustomResourceDefinitionSource
+    listKind: CustomResourceDefinitionSourceList
+    plural: customresourcedefinitionsources
+    singular: customresourcedefinitionsource
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: BundleSource is the Schema for the bundlesources API.
+        description: CustomResourceDefinitionSource is the Schema for the bundlesources
+          API.
         properties:
           apiVersion:
             description: |-
@@ -37,21 +38,32 @@ spec:
           metadata:
             type: object
           spec:
-            description: BundleSourceSpec defines the desired state of BundleSource.
+            description: CustomResourceDefinitionSourceSpec defines the desired state
+              of CustomResourceDefinitionSource.
             properties:
-              majorVersions:
-                description: MajorVersions defines the major versions of the bundles
-                  that should be made available.
-                items:
-                  type: integer
-                type: array
-              ociURI:
-                description: OCIURI is the URI of the OCI registry where the bundles
-                  are stored.
-                type: string
+              reference:
+                description: Reference is a reference to the source of the bundle.
+                properties:
+                  apiVersion:
+                    description: APIVersion of the referent.
+                    enum:
+                    - source.toolkit.fluxcd.io/v1
+                    type: string
+                  kind:
+                    description: Kind of the referent.
+                    enum:
+                    - OCIRepository
+                    type: string
+                  name:
+                    description: Name of the referent.
+                    minLength: 1
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
             required:
-            - majorVersions
-            - ociURI
+            - reference
             type: object
         type: object
     served: true

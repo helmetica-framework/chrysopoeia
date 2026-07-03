@@ -1,12 +1,24 @@
 ---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: podinfo-v6
+spec:
+  interval: 5m
+  provider: generic
+  ref:
+    semver: 6.x
+  url: oci://ghcr.io/stefanprodan/charts/podinfo
+---
 apiVersion: helmetica.io/v1
-kind: BundleSource
+kind: CustomResourceDefinitionSource
 metadata:
   labels:
     app.kubernetes.io/name: chrysopoeia
     app.kubernetes.io/managed-by: kustomize
-  name: bundlesource-sample
+  name: podinfo-v6
 spec:
-  ociURI: oci://ghcr.io/stefanprodan/charts/podinfo
-  majorVersions:
-    - 6
+  reference:
+    apiVersion: source.toolkit.fluxcd.io/v1
+    kind: OCIRepository
+    name: podinfo-v6

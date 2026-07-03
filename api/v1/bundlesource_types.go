@@ -4,35 +4,48 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// BundleSourceSpec defines the desired state of BundleSource.
-type BundleSourceSpec struct {
-	// OCIURI is the URI of the OCI registry where the bundles are stored.
-	// +required
-	OCIURI string `json:"ociURI"`
-	// MajorVersions defines the major versions of the bundles that should be made available.
-	// +required
-	MajorVersions []uint `json:"majorVersions"`
+// CustomResourceDefinitionSourceSpec defines the desired state of CustomResourceDefinitionSource.
+type CustomResourceDefinitionSourceSpec struct {
+	// Reference is a reference to the source of the bundle.
+	Reference SourceReference `json:"reference"`
 }
 
 // +kubebuilder:object:root=true
 
-// BundleSource is the Schema for the bundlesources API.
-type BundleSource struct {
+// CustomResourceDefinitionSource is the Schema for the bundlesources API.
+type CustomResourceDefinitionSource struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec BundleSourceSpec `json:"spec,omitempty"`
+	Spec CustomResourceDefinitionSourceSpec `json:"spec,omitempty"`
+}
+
+type SourceReference struct {
+	// APIVersion of the referent.
+	// +kubebuilder:validation:Enum=source.toolkit.fluxcd.io/v1
+	// +optional
+	APIVersion string `json:"apiVersion,omitempty"`
+
+	// Kind of the referent.
+	// +kubebuilder:validation:Enum=OCIRepository
+	// +required
+	Kind string `json:"kind"`
+
+	// Name of the referent.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
 }
 
 // +kubebuilder:object:root=true
 
-// BundleSourceList contains a list of BundleSource.
-type BundleSourceList struct {
+// CustomResourceDefinitionSourceList contains a list of CustomResourceDefinitionSource.
+type CustomResourceDefinitionSourceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []BundleSource `json:"items"`
+	Items           []CustomResourceDefinitionSource `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&BundleSource{}, &BundleSourceList{})
+	SchemeBuilder.Register(&CustomResourceDefinitionSource{}, &CustomResourceDefinitionSourceList{})
 }

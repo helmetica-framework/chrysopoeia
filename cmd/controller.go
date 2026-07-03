@@ -36,6 +36,7 @@ var probeAddr string
 var zapOpts = zap.Options{
 	Development: true,
 }
+var sourceControllerHostnameOverride string
 
 func init() {
 	RootCmd.AddCommand(controllerCmd)
@@ -64,6 +65,8 @@ func init() {
 	controllerCmd.Flags().String("metrics-cert-path", "", "The directory that contains the metrics server certificate.")
 	controllerCmd.Flags().String("metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
 	controllerCmd.Flags().String("metrics-cert-key", "tls.key", "The name of the metrics server key file.")
+
+	controllerCmd.Flags().StringVar(&sourceControllerHostnameOverride, "source-controller-hostname-override", "", "If set, overrides the hostname used to access the source controller. Useful for testing against a local source controller.")
 }
 
 var controllerCmd = &cobra.Command{
@@ -94,7 +97,9 @@ func runController(cmd *cobra.Command, _ []string) error {
 	metricsCertName, mcnerr := cmd.Flags().GetString("metrics-cert-name")
 	metricsCertKey, mckerr := cmd.Flags().GetString("metrics-cert-key")
 
-	if err := multierr.Combine(cnerr, wcperr, wcnerr, wckerr, mcperr, mcnerr, mckerr, smerr); err != nil {
+	sourceControllerHostnameOverride, sherr := cmd.Flags().GetString("source-controller-hostname-override")
+
+	if err := multierr.Combine(cnerr, wcperr, wcnerr, wckerr, mcperr, mcnerr, mckerr, smerr, sherr); err != nil {
 		return fmt.Errorf("failed to get flags: %w", err)
 	}
 
@@ -183,13 +188,15 @@ func runController(cmd *cobra.Command, _ []string) error {
 
 	lifetimeCtx := cmd.Context()
 
-	bsm := &controllers.BundleSourceManager{
+	bsm := &controllers.CustomResourceDefinitionSourceManager{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder("bundle-source-controller"),
+		Recorder: mgr.GetEventRecorder("customresourcedefinitionsource-controller"),
+
+		SourceControllerHostnameOverride: sourceControllerHostnameOverride,
 	}
-	if err := bsm.SetupWithManager("bundle-source", mgr); err != nil {
-		return fmt.Errorf("unable to create BundleSource controller: %w", err)
+	if err := bsm.SetupWithManager("customresourcedefinitionsource", mgr); err != nil {
+		return fmt.Errorf("unable to create CustomResourceDefinitionSource controller: %w", err)
 	}
 
 	//+kubebuilder:scaffold:builder
