@@ -10,16 +10,6 @@ type CustomResourceDefinitionSourceSpec struct {
 	Reference SourceReference `json:"reference"`
 }
 
-// +kubebuilder:object:root=true
-
-// CustomResourceDefinitionSource is the Schema for the bundlesources API.
-type CustomResourceDefinitionSource struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec CustomResourceDefinitionSourceSpec `json:"spec,omitempty"`
-}
-
 type SourceReference struct {
 	// APIVersion of the referent.
 	// +kubebuilder:validation:Enum=source.toolkit.fluxcd.io/v1
@@ -35,6 +25,33 @@ type SourceReference struct {
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Name string `json:"name"`
+}
+
+// CustomResourceDefinitionSourceStatus defines the observed state of CustomResourceDefinitionSource
+type CustomResourceDefinitionSourceStatus struct {
+	// Conditions holds the conditions for the CustomResourceDefinitionSource.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// AppliedReferenceGeneration is the last applied generation of the referenced source.
+	// +optional
+	AppliedReferenceGeneration int64 `json:"appliedReferenceGeneration,omitempty"`
+
+	// AppliedReferenceRevision is the last applied revision of the referenced source.
+	// +optional
+	AppliedReferenceRevision string `json:"appliedReferenceRevision,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+
+// CustomResourceDefinitionSource is the Schema for the bundlesources API.
+type CustomResourceDefinitionSource struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   CustomResourceDefinitionSourceSpec   `json:"spec,omitempty"`
+	Status CustomResourceDefinitionSourceStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true

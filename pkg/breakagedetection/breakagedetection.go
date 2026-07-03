@@ -12,6 +12,11 @@ import (
 // Warnings indicate potential issues that may arise from the update, but do not prevent the update from being applied.
 // Errors indicate breaking changes that will prevent the update from being applied.
 func Check(original, updated apiextv1.CustomResourceDefinition) (warnings []string, errors []string) {
+	defer func() {
+		slices.Sort(warnings)
+		slices.Sort(errors)
+	}()
+
 	if original.Spec.Group != updated.Spec.Group {
 		errors = append(errors, "Group has changed")
 	}

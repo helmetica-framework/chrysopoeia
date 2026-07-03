@@ -4,9 +4,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/helmetica-framework/chrysopoeia/pkg/schemagen"
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	kubeyaml "sigs.k8s.io/yaml"
+
+	"github.com/helmetica-framework/chrysopoeia/pkg/schemagen"
 )
 
 func TestGenerateCRD_Golden(t *testing.T) {
