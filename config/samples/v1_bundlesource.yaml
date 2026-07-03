@@ -1,0 +1,12 @@
+---
+apiVersion: helmetica.io/v1
+kind: BundleSource
+metadata:
+  labels:
+    app.kubernetes.io/name: chrysopoeia
+    app.kubernetes.io/managed-by: kustomize
+  name: bundlesource-sample
+spec:
+  ociURI: oci://ghcr.io/stefanprodan/charts/podinfo
+  majorVersions:
+    - 6
