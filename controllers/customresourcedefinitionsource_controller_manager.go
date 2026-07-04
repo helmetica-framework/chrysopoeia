@@ -150,6 +150,11 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 
 	l.Info("Successfully generated CRD from chart", "ArtifactURL", chartURL)
 
+	if crd.Labels == nil {
+		crd.Labels = make(map[string]string)
+	}
+	crd.Labels["chrysopoeia.io/managed"] = ""
+
 	if crd.Annotations == nil {
 		crd.Annotations = make(map[string]string)
 	}

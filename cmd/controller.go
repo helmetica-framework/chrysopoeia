@@ -15,11 +15,14 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/multierr"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -181,6 +184,17 @@ func runController(cmd *cobra.Command, _ []string) error {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "4ede2161a2.chrysopoeia.helmetica.io",
+
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				controllerNamespace: {},
+			},
+			ByObject: map[client.Object]cache.ByObject{
+				&apiextv1.CustomResourceDefinition{}: {
+					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
+				},
+			},
+		},
 
 		LeaderElectionReleaseOnCancel: true,
 	})
