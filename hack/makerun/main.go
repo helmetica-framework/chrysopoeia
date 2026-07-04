@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 
 	"golang.org/x/sync/errgroup"
 )
 
 // This is a helper program to run the controller and the source controller port forward in parallel for local development.
 func main() {
-	g, ctx := errgroup.WithContext(context.Background())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		fmt.Println("Running port forward to source controller")
 		cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", "source-system", "svc/source-controller", "8080:80")
