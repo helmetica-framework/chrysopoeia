@@ -11,6 +11,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	imagereflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/spf13/cobra"
 	"go.uber.org/multierr"
@@ -40,7 +41,7 @@ var probeAddr string
 var zapOpts = zap.Options{
 	Development: true,
 }
-var sourceControllerHostnameOverride string
+var sourceControllerHostnameOverride, imageReflectorControllerHostname string
 
 func init() {
 	RootCmd.AddCommand(controllerCmd)
@@ -71,6 +72,7 @@ func init() {
 	controllerCmd.Flags().String("metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 
 	controllerCmd.Flags().StringVar(&sourceControllerHostnameOverride, "source-controller-hostname-override", "", "If set, overrides the hostname used to access the source controller. Useful for testing against a local source controller.")
+	controllerCmd.Flags().StringVar(&imageReflectorControllerHostname, "image-reflector-controller-hostname", "image-reflector-controller-tags.image-reflector-system.svc", "Sets the hostname used to access the image reflector controller to load tags for a OCI image.")
 }
 
 var controllerCmd = &cobra.Command{
@@ -85,6 +87,7 @@ func newScheme() *runtime.Scheme {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(chrysopoeiav1.AddToScheme(scheme))
 	utilruntime.Must(sourcev1.AddToScheme(scheme))
+	utilruntime.Must(imagereflectorv1.AddToScheme(scheme))
 	utilruntime.Must(apiextv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 	return scheme
@@ -103,8 +106,9 @@ func runController(cmd *cobra.Command, _ []string) error {
 	metricsCertKey, mckerr := cmd.Flags().GetString("metrics-cert-key")
 
 	sourceControllerHostnameOverride, sherr := cmd.Flags().GetString("source-controller-hostname-override")
+	imageReflectorControllerHostname, irherr := cmd.Flags().GetString("image-reflector-controller-hostname")
 
-	if err := multierr.Combine(cnerr, wcperr, wcnerr, wckerr, mcperr, mcnerr, mckerr, smerr, sherr); err != nil {
+	if err := multierr.Combine(cnerr, wcperr, wcnerr, wckerr, mcperr, mcnerr, mckerr, smerr, sherr, irherr); err != nil {
 		return fmt.Errorf("failed to get flags: %w", err)
 	}
 
@@ -210,6 +214,7 @@ func runController(cmd *cobra.Command, _ []string) error {
 		Recorder: mgr.GetEventRecorder("customresourcedefinitionsource-controller"),
 
 		SourceControllerHostnameOverride: sourceControllerHostnameOverride,
+		ImageReflectorControllerHostname: imageReflectorControllerHostname,
 	}
 	if err := bsm.SetupWithManager("customresourcedefinitionsource", mgr); err != nil {
 		return fmt.Errorf("unable to create CustomResourceDefinitionSource controller: %w", err)

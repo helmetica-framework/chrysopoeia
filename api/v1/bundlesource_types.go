@@ -8,6 +8,10 @@ import (
 type CustomResourceDefinitionSourceSpec struct {
 	// Reference is a reference to the source of the bundle.
 	Reference SourceReference `json:"reference"`
+
+	// VersionDiscovery defines how to discover the version of the source.
+	// +optional
+	VersionDiscovery VersionDiscovery `json:"versionDiscovery,omitempty"`
 }
 
 type SourceReference struct {
@@ -18,6 +22,28 @@ type SourceReference struct {
 
 	// Kind of the referent.
 	// +kubebuilder:validation:Enum=OCIRepository
+	// +required
+	Kind string `json:"kind"`
+
+	// Name of the referent.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
+}
+
+type VersionDiscovery struct {
+	// Reference is a reference to the discovery source of the version.
+	Reference DiscoveryReference `json:"reference"`
+}
+
+type DiscoveryReference struct {
+	// APIVersion of the referent.
+	// +kubebuilder:validation:Enum=image.toolkit.fluxcd.io/v1
+	// +optional
+	APIVersion string `json:"apiVersion,omitempty"`
+
+	// Kind of the referent.
+	// +kubebuilder:validation:Enum=ImageRepository
 	// +required
 	Kind string `json:"kind"`
 

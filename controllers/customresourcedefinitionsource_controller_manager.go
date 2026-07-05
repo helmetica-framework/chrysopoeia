@@ -1,14 +1,20 @@
 package controllers
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
+	imagereflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -38,6 +44,8 @@ type CustomResourceDefinitionSourceManager struct {
 	// SourceControllerHostnameOverride is an optional hostname override for the source controller.
 	// If set, it will be used to access the source controller instead of the hostname reported by the source controller.
 	SourceControllerHostnameOverride string
+	// ImageReflectorControllerHostname is the hostname used to access the image reflector controller to load tags for a OCI image.
+	ImageReflectorControllerHostname string
 }
 
 //+kubebuilder:rbac:groups=chrysopoeia.io,resources=customresourcedefinitionsources,verbs=get;list;watch
@@ -150,6 +158,110 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 
 	l.Info("Successfully generated CRD from chart", "ArtifactURL", chartURL)
 
+	if source.Spec.VersionDiscovery.Reference.Name != "" {
+		l.Info("Tag discovery is enabled, fetching ImageRepository for tag discovery", "ImageRepository", source.Spec.VersionDiscovery.Reference.Name)
+		var versionDiscoveryRepo imagereflectorv1.ImageRepository
+		if err := r.Get(ctx, client.ObjectKey{Namespace: source.Namespace, Name: source.Spec.VersionDiscovery.Reference.Name}, &versionDiscoveryRepo); err != nil {
+			l.Error(err, "Failed to get ImageRepository for tag discovery", "ImageRepository", source.Spec.VersionDiscovery.Reference.Name)
+			if apierrors.IsNotFound(err) {
+				statusCondition.Reason = "VersionDiscoveryImageRepositoryNotFound"
+				statusCondition.Message = fmt.Sprintf("ImageRepository %s for tag discovery not found", source.Spec.VersionDiscovery.Reference.Name)
+				return ctrl.Result{}, nil
+			}
+			return ctrl.Result{}, err
+		}
+		if !apimeta.IsStatusConditionTrue(versionDiscoveryRepo.Status.Conditions, "Ready") {
+			l.Info("ImageRepository is not yet ready")
+			statusCondition.Reason = "ImageRepositoryNotReady"
+			statusCondition.Message = fmt.Sprintf("ImageRepository %s is not ready", source.Spec.VersionDiscovery.Reference.Name)
+			return ctrl.Result{}, nil
+		}
+
+		l.Info("ImageRepository is ready", "ImageRepository", versionDiscoveryRepo.Name)
+
+		url := new(url.URL)
+		url.Scheme = "http"
+		url.Host = r.ImageReflectorControllerHostname
+		// TODO(bastjan): Test for gzipped file for tag discovery, and handle accordingly
+		// The controller switches to a gzipped file if the uncompressed file is larger than a few KB.
+		url.Path = fmt.Sprintf("/imagerepository/%s/%s/tags.txt", versionDiscoveryRepo.Namespace, versionDiscoveryRepo.Name)
+
+		resp, err := http.Get(url.String())
+		if err != nil {
+			l.Error(err, "Failed to fetch tags from image reflector controller", "URL", url.String())
+			statusCondition.Reason = "VersionDiscoveryFetchFailed"
+			statusCondition.Message = fmt.Sprintf("Failed to fetch tags from image reflector controller: %v", err)
+			return ctrl.Result{}, err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			l.Error(nil, "Failed to fetch tags from image reflector controller", "URL", url.String(), "StatusCode", resp.StatusCode)
+			statusCondition.Reason = "VersionDiscoveryFetchFailed"
+			statusCondition.Message = fmt.Sprintf("Failed to fetch tags from image reflector controller: status code %d", resp.StatusCode)
+			return ctrl.Result{}, fmt.Errorf("failed to fetch tags from image reflector controller: status code %d", resp.StatusCode)
+		}
+
+		tags, err := parseTagsTxt(resp.Body)
+		if err != nil {
+			l.Error(err, "Failed to parse tags from image reflector controller", "URL", url.String())
+			statusCondition.Reason = "VersionDiscoveryParseFailed"
+			statusCondition.Message = fmt.Sprintf("Failed to parse tags from image reflector controller: %v", err)
+			return ctrl.Result{}, err
+		}
+
+		l.Info("Successfully fetched and parsed tags from image reflector controller", "URL", url.String(), "TagsCount", len(tags))
+
+		highest, err := semver.NewConstraint(fmt.Sprintf("<=%s", strings.ReplaceAll(chart.Metadata.Version, "_", "+")))
+		if err != nil {
+			l.Error(err, "Cannot create semver constraint", "ChartVersion", chart.Metadata.Version)
+			statusCondition.Reason = "InvalidChartVersion"
+			statusCondition.Message = fmt.Sprintf("Invalid strict chart version: %s", chart.Metadata.Version)
+			return ctrl.Result{}, err
+		}
+
+		if len(crd.Spec.Versions) != 1 {
+			l.Error(nil, "CRD has more than one version, cannot apply version discovery", "CRDName", crd.Name)
+			statusCondition.Reason = "CRDMultipleVersions"
+			statusCondition.Message = fmt.Sprintf("CRD %s has more than one version, cannot apply version discovery", crd.Name)
+			return ctrl.Result{}, fmt.Errorf("CRD has more than one version, cannot apply version discovery")
+		}
+
+		if spec, ok := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]; ok {
+			if versionProp, ok := spec.Properties["version"]; ok {
+				versionProp.Enum = make([]apiextv1.JSON, 0, len(tags))
+				for _, tag := range tags {
+					if !highest.Check(tag) {
+						l.Info("Skipping tag that does not satisfy chart version constraint", "Tag", tag.String(), "ChartVersion", chart.Metadata.Version)
+						continue
+					}
+					tagJSON, err := json.Marshal(tag)
+					if err != nil {
+						l.Error(err, "Failed to marshal tag to JSON", "Tag", tag.String())
+						statusCondition.Reason = "VersionDiscoveryMarshalFailed"
+						statusCondition.Message = fmt.Sprintf("Failed to marshal tag %s to JSON: %v", tag.String(), err)
+						return ctrl.Result{}, err
+					}
+					versionProp.Enum = append(versionProp.Enum, apiextv1.JSON{Raw: tagJSON})
+				}
+				spec.Properties["version"] = versionProp
+				crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"] = spec
+			} else {
+				l.Error(nil, "CRD spec does not have a version property, cannot apply version discovery", "CRDName", crd.Name)
+				statusCondition.Reason = "CRDNoVersionProperty"
+				statusCondition.Message = fmt.Sprintf("CRD %s spec does not have a version property, cannot apply version discovery", crd.Name)
+				return ctrl.Result{}, fmt.Errorf("CRD spec does not have a version property, cannot apply version discovery")
+			}
+		} else {
+			l.Error(nil, "CRD spec does not have a spec property, cannot apply version discovery", "CRDName", crd.Name)
+			statusCondition.Reason = "CRDNoSpecProperty"
+			statusCondition.Message = fmt.Sprintf("CRD %s does not have a spec property, cannot apply version discovery", crd.Name)
+			return ctrl.Result{}, fmt.Errorf("CRD does not have a spec property, cannot apply version discovery")
+		}
+
+		l.Info("Successfully applied version discovery to CRD", "CRDName", crd.Name, "VersionsCount", len(tags))
+	}
+
 	if crd.Labels == nil {
 		crd.Labels = make(map[string]string)
 	}
@@ -255,4 +367,31 @@ func ociRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client) func(
 		}
 		return requests
 	}
+}
+
+func parseTagsTxt(r io.Reader) ([]*semver.Version, error) {
+	br := bufio.NewReader(r)
+	var tags []*semver.Version
+
+	more := true
+	for more {
+		line, err := br.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+		if err == io.EOF {
+			more = false
+		}
+		ver, err := semver.StrictNewVersion(strings.TrimSpace(line))
+		if err != nil {
+			continue // Ignore invalid semver tags
+		}
+		tags = append(tags, ver)
+	}
+
+	slices.SortFunc(tags, func(a, b *semver.Version) int {
+		return b.Compare(a)
+	})
+
+	return tags, nil
 }

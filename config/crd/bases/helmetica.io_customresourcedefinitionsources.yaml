@@ -62,6 +62,35 @@ spec:
                 - kind
                 - name
                 type: object
+              versionDiscovery:
+                description: VersionDiscovery defines how to discover the version
+                  of the source.
+                properties:
+                  reference:
+                    description: Reference is a reference to the discovery source
+                      of the version.
+                    properties:
+                      apiVersion:
+                        description: APIVersion of the referent.
+                        enum:
+                        - image.toolkit.fluxcd.io/v1
+                        type: string
+                      kind:
+                        description: Kind of the referent.
+                        enum:
+                        - ImageRepository
+                        type: string
+                      name:
+                        description: Name of the referent.
+                        minLength: 1
+                        type: string
+                    required:
+                    - kind
+                    - name
+                    type: object
+                required:
+                - reference
+                type: object
             required:
             - reference
             type: object

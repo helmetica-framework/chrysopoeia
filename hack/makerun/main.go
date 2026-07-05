@@ -23,8 +23,18 @@ func main() {
 		return cmd.Run()
 	})
 	g.Go(func() error {
+		fmt.Println("Running port forward to image reflector controller")
+		cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", "image-reflector-system", "svc/image-reflector-controller-tags", "8090:8090")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	})
+	g.Go(func() error {
 		fmt.Println("Running controller")
-		cmd := exec.CommandContext(ctx, "go", "run", "main.go", "controller", "--source-controller-hostname-override=localhost:8080")
+		cmd := exec.CommandContext(ctx, "go", "run", "main.go", "controller",
+			"--source-controller-hostname-override=localhost:8080",
+			"--image-reflector-controller-hostname=localhost:8090",
+		)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()

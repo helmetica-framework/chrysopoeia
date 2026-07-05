@@ -7,7 +7,7 @@ A controller creating CRDs from Helm charts by translating their `values.yaml`.
 ## Quickstart
 
 ```bash
-kubectl apply -k https://github.com/fluxcd/source-controller//config/default
+kubectl apply -k config/flux
 
 kubectl apply -k config/crd
 kubectl apply -k config/samples
