@@ -20,3 +20,4 @@ kubectl get crds instances.v6.podinfo.bundles.appcat.io
 ## Libraries
 
 * [schemagen](https://pkg.go.dev/github.com/helmetica-framework/chrysopoeia/pkg/schemagen) - Generate CRDs from Helm charts.
+* [breakagedetection](https://pkg.go.dev/github.com/helmetica-framework/chrysopoeia/pkg/breakagedetection) - Detect breaking changes between CRD versions.
