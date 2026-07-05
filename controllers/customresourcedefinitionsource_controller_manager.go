@@ -346,10 +346,35 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 	return ctrl.Result{}, nil
 }
 
+const (
+	sourceReferenceIndexField           = ".spec.reference.name"
+	versionDiscoveryReferenceIndexField = ".spec.versionDiscovery.reference.name"
+)
+
 func (r *CustomResourceDefinitionSourceManager) SetupWithManager(name string, mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &chrysopoeiav1.CustomResourceDefinitionSource{}, sourceReferenceIndexField, func(rawObj client.Object) []string {
+		source := rawObj.(*chrysopoeiav1.CustomResourceDefinitionSource)
+		if source.Spec.Reference.Name == "" {
+			return nil
+		}
+		return []string{source.Spec.Reference.Name}
+	}); err != nil {
+		return fmt.Errorf("Failed to setup indexer for source reference: %w", err)
+	}
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &chrysopoeiav1.CustomResourceDefinitionSource{}, versionDiscoveryReferenceIndexField, func(rawObj client.Object) []string {
+		source := rawObj.(*chrysopoeiav1.CustomResourceDefinitionSource)
+		if source.Spec.VersionDiscovery.Reference.Name == "" {
+			return nil
+		}
+		return []string{source.Spec.VersionDiscovery.Reference.Name}
+	}); err != nil {
+		return fmt.Errorf("Failed to setup indexer for version discovery reference: %w", err)
+	}
+
 	return builder.ControllerManagedBy(mgr).
 		For(&chrysopoeiav1.CustomResourceDefinitionSource{}).
 		Watches(&sourcev1.OCIRepository{}, handler.EnqueueRequestsFromMapFunc(ociRepositoryToCustomResourceDefinitionSourceMapFunc(mgr.GetClient()))).
+		Watches(&imagereflectorv1.ImageRepository{}, handler.EnqueueRequestsFromMapFunc(imageRepositoryToCustomResourceDefinitionSourceMapFunc(mgr.GetClient()))).
 		Named(name).
 		Complete(r)
 }
@@ -357,20 +382,30 @@ func (r *CustomResourceDefinitionSourceManager) SetupWithManager(name string, mg
 func ociRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client) func(ctx context.Context, o client.Object) []reconcile.Request {
 	return func(ctx context.Context, o client.Object) []reconcile.Request {
 		var crds chrysopoeiav1.CustomResourceDefinitionSourceList
-		if err := c.List(ctx, &crds, client.InNamespace(o.GetNamespace())); err != nil {
+		if err := c.List(ctx, &crds, client.InNamespace(o.GetNamespace()), client.MatchingFields{sourceReferenceIndexField: o.GetName()}); err != nil {
 			log.FromContext(ctx).Error(err, "Failed to list CustomResourceDefinitionSources")
 			return nil
 		}
-		var requests []reconcile.Request
-		for _, crd := range crds.Items {
-			if crd.Spec.Reference.Name == o.GetName() {
-				requests = append(requests, reconcile.Request{
-					NamespacedName: client.ObjectKey{
-						Name:      crd.Name,
-						Namespace: crd.Namespace,
-					},
-				})
-			}
+		requests := make([]reconcile.Request, len(crds.Items))
+		for i, crd := range crds.Items {
+			requests[i].Name = crd.Name
+			requests[i].Namespace = crd.Namespace
+		}
+		return requests
+	}
+}
+
+func imageRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client) func(ctx context.Context, o client.Object) []reconcile.Request {
+	return func(ctx context.Context, o client.Object) []reconcile.Request {
+		var crds chrysopoeiav1.CustomResourceDefinitionSourceList
+		if err := c.List(ctx, &crds, client.InNamespace(o.GetNamespace()), client.MatchingFields{versionDiscoveryReferenceIndexField: o.GetName()}); err != nil {
+			log.FromContext(ctx).Error(err, "Failed to list CustomResourceDefinitionSources")
+			return nil
+		}
+		requests := make([]reconcile.Request, len(crds.Items))
+		for i, crd := range crds.Items {
+			requests[i].Name = crd.Name
+			requests[i].Namespace = crd.Namespace
 		}
 		return requests
 	}
