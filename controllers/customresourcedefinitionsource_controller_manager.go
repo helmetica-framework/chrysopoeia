@@ -212,7 +212,14 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 
 		l.Info("Successfully fetched and parsed tags from image reflector controller", "URL", url.String(), "TagsCount", len(tags))
 
-		highest, err := semver.NewConstraint(fmt.Sprintf("<=%s", strings.ReplaceAll(chart.Metadata.Version, "_", "+")))
+		chartVersion, err := semver.StrictNewVersion(strings.ReplaceAll(chart.Metadata.Version, "_", "+"))
+		if err != nil {
+			l.Error(err, "Failed to parse chart version", "ChartVersion", chart.Metadata.Version)
+			statusCondition.Reason = "InvalidChartVersion"
+			statusCondition.Message = fmt.Sprintf("Invalid strict chart version: %s", chart.Metadata.Version)
+			return ctrl.Result{}, err
+		}
+		versionConstraint, err := semver.NewConstraint(fmt.Sprintf("<= %s, ~%d", chartVersion.String(), chartVersion.Major()))
 		if err != nil {
 			l.Error(err, "Cannot create semver constraint", "ChartVersion", chart.Metadata.Version)
 			statusCondition.Reason = "InvalidChartVersion"
@@ -231,7 +238,7 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 			if versionProp, ok := spec.Properties["version"]; ok {
 				versionProp.Enum = make([]apiextv1.JSON, 0, len(tags))
 				for _, tag := range tags {
-					if !highest.Check(tag) {
+					if !versionConstraint.Check(tag) {
 						l.Info("Skipping tag that does not satisfy chart version constraint", "Tag", tag.String(), "ChartVersion", chart.Metadata.Version)
 						continue
 					}
