@@ -14,7 +14,20 @@ spec:
     singular: customresourcedefinitionsource
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.reference.name
+      name: SourceRef
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].message
+      name: Status
+      type: string
+    name: v1
     schema:
       openAPIV3Schema:
         description: CustomResourceDefinitionSource is the Schema for the bundlesources
