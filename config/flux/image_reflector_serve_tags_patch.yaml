@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-reflector-controller
+  labels:
+    control-plane: controller
+spec:
+  template:
+    spec:
+      containers:
+      - name: manager
+        args:
+        - --watch-all-namespaces
+        - --log-level=info
+        - --log-encoding=json
+        - --enable-leader-election
+        - --feature-gates=FluxStorage=true
+        securityContext:
+          runAsUser: 1337
+      - name: tag-serve-sidecar
+        image: nginxinc/nginx-unprivileged:1.31.2
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /tmp
+          name: temp
+        - mountPath: /data
+          name: data
+        - mountPath: /etc/nginx/nginx.conf
+          name: nginx-conf
+          subPath: nginx.conf
+        securityContext:
+          runAsUser: 1337
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+      volumes:
+      - configMap:
+          name: tag-serve-nginx-conf
+        name: nginx-conf

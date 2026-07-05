@@ -1,0 +1,10 @@
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- https://github.com/fluxcd/source-controller//config/default
+- https://github.com/fluxcd/image-reflector-controller//config/default
+- tag-serve-nginx-conf.yaml
+- tags-serve-service.yaml
+patches:
+- path: image_reflector_serve_tags_patch.yaml
