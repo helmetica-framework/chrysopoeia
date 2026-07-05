@@ -1,0 +1,29 @@
+# This key won't be changed
+replicaCount: 1
+
+# This tests a nested key with desciption and a default value
+image:
+  repository: juice-shop
+  # This will be changed to a different value
+  pullPolicy: IfNotPresent
+
+config:
+  server:
+    port: 3000
+
+emptyArray: []
+emptyArrayWithAddedType: []
+emptyObject: {}
+
+
+inArray:
+  - name: item1
+    value: 1
+
+arrayWithAddedItem:
+  - name: item1
+    value: 1
+
+removedKey: "Some value"
+
+nulledKeyButKeepsType: "Some value"

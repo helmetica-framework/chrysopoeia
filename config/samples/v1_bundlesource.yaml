@@ -10,6 +10,18 @@ spec:
     semver: 6.x
   url: oci://ghcr.io/stefanprodan/charts/podinfo
 ---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: podinfo
+spec:
+  exclusionList:
+  - ^.*\.sig$
+  - ^sha256-.+$
+  image: ghcr.io/stefanprodan/charts/podinfo
+  interval: 5m
+  provider: generic
+---
 apiVersion: helmetica.io/v1
 kind: CustomResourceDefinitionSource
 metadata:
@@ -22,3 +34,8 @@ spec:
     apiVersion: source.toolkit.fluxcd.io/v1
     kind: OCIRepository
     name: podinfo-v6
+  versionDiscovery:
+    reference:
+      apiVersion: image.toolkit.fluxcd.io/v1
+      kind: ImageRepository
+      name: podinfo
