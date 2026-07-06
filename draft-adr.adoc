@@ -210,14 +210,15 @@ Users that want a specifig version for testing purposes can create a new `OCIRep
 The controller watches `CustomResourceDefinitionSource` resources and their referenced `OCIRepository` and `ImageRepository` resources.
 
 On reconcile the controller will:
-- Download the Helm chart from the referenced `OCIRepository` resource.
-- Unpack the chart and read the `values.yaml` file.
-- Generate a CRD with an OpenAPI schema based on the `values.yaml` file.
-- If an `ImageRepository` resource is referenced
-  - Download the chart versions from the `ImageRepository`
-  - Filters versions based on the chart version `~MAJOR, <= VERSION`
-  - Generate an enum for the `.spec.version` field in the CRD based on the filtered versions.
-- If a CRD with the same name already exists
-  - Compare the OpenAPI schema of the existing CRD with the generated one.
-  - If the schema has changed in a way that is not backwards compatible, reject the update and report an error in the `CustomResourceDefinitionSource` status.
-- Update the existing CRD with the new schema.
+
+* Download the Helm chart from the referenced `OCIRepository` resource.
+* Unpack the chart and read the `values.yaml` file.
+* Generate a CRD with an OpenAPI schema based on the `values.yaml` file.
+* If an `ImageRepository` resource is referenced
+** Download the chart versions from the `ImageRepository`
+** Filters versions based on the chart version `~MAJOR, <= VERSION`
+** Generate an enum for the `.spec.version` field in the CRD based on the filtered versions.
+* If a CRD with the same name already exists
+** Compare the OpenAPI schema of the existing CRD with the generated one.
+** If the schema has changed in a way that is not backwards compatible, reject the update and report an error in the `CustomResourceDefinitionSource` status.
+* Update the existing CRD with the new schema.
