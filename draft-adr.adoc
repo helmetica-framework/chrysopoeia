@@ -1,0 +1,223 @@
+# chrysopoeia Draft Architecture
+
+## Problem Statement
+
+We decided to use Helm charts as the primary interface between service maintainers and the service operators.
+Helm charts are the most used package format in the Kubernetes ecosystem, and both service maintainers and operators are familiar with them.
+
+There are many projects that can apply charts in a reconcile loop such as ArgoCD and FluxCD.
+All of those tools suffer from one deficiency: they take a unstructured `values.yaml` file as input, which makes parameter discovery and validation difficult.
+This is especially true for complex services that have many parameters.
+
+Kubernetes allows defining APIs using OpenAPI specifications through Custom Resource Definitions (CRDs).
+This allows defining a structured API which is well integrated into tooling and editors and can be used to validate the input parameters.
+OpenAPI specifications can be quite verbose and complex, which makes them hard to maintain.
+
+The goal of this controller is to translate a Helm chart `values.yaml` file into a CRD with a well defined OpenAPI specification.
+This keeps maintaining a service Helm chart simple, while allowing operators to use a structured API to configure the service.
+
+## High level goals
+
+- Provide a structured API for service configuration based on Helm chart values.
+- Allow service maintainers to continue using Helm charts without needing to define a CRD by hand.
+- Make CRDs less of a singleton to allow for multiple versions of the same service to be deployed in the same cluster for testing and development purposes.
+
+## Proposed Architecture
+
+### Relying on FluxCD GitOps controllers for OCI discovery and downloads
+
+FluxCD brings multiple modular controllers to handle OCI repositories.
+It handles authentication, discovery, integrity checking, and downloading of Helm charts from OCI registries.
+By relying on FluxCD for this functionality, we don't have to reimplement all those features and can focus on the core functionality of translating Helm chart values into CRDs.
+
+### `values.yaml`
+
+The `values.yaml` file of a Helm chart defines the configuration options for the chart.
+The controller will read the `values.yaml` file and generate a CRD with an OpenAPI schema that reflects the structure of the `values.yaml` file.
+The generated CRD will have a `.spec.values` field that contains the configuration options defined in the `values.yaml` file.
+
+[source,yaml]
+----
+# This will set the replicaset count.
+replicaCount: 1
+
+# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+image:
+  repository: ghcr.io/nginx/nginx-unprivileged
+  # This sets the pull policy for images.
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+# Demonstrates a tagged null type
+# @type: int
+timeoutSeconds:
+----
+
+would be translated into the following CRD:
+
+[source,yaml]
+----
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: juiceshops.v3.juiceshop.bundles.appcat.io
+spec:
+  group: v3.juiceshop.bundles.appcat.io
+  names:
+    kind: JuiceShop
+    listKind: JuiceShopList
+    plural: juiceshops
+    singular: juiceshop
+  scope: Namespaced
+  versions:
+  - name: bundle
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            description: Configures the desired state of the service.
+            properties:
+              desiredRevision:
+                description: The desired revision of the service.
+                type: string
+              values:
+                description: This field together with the `.spec.version` field defines
+                  the configuration of the service. Every change to either of these
+                  two fields creates a new revision of the service.
+                properties:
+                  image:
+                    description: 'This sets the container image more information can
+                      be found here: https://kubernetes.io/docs/concepts/containers/images/'
+                    properties:
+                      pullPolicy:
+                        description: This sets the pull policy for images.
+                        type: string
+                      repository:
+                        type: string
+                      tag:
+                        description: Overrides the image tag whose default is the
+                          chart appVersion.
+                        type: string
+                    type: object
+                  replicaCount:
+                    description: This will set the replicaset count.
+                    type: integer
+                  timeoutSeconds:
+                    description: Demonstrates a tagged null type
+                    type: integer
+                    nullable: true
+                type: object
+              version:
+                description: The version of the service. Every change to this field
+                  together with the `.spec.values` field creates a new revision of
+                  the service.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null
+----
+
+### Controller API
+
+The API should be CRD based and should make it possible to define all possible configuration options for Flux.
+Errors should be reported in a structured and discoverable way.
+
+[source,yaml]
+----
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+metadata:
+  name: v6.podinfo <1>
+spec:
+  crdNames: <2>
+    kind: PodInfo
+    plural: podinfos
+  reference: <3>
+    apiVersion: source.toolkit.fluxcd.io/v1
+    kind: OCIRepository
+    name: podinfo-v6
+  versionDiscovery:
+    reference: <4>
+      apiVersion: image.toolkit.fluxcd.io/v1
+      kind: ImageRepository
+      name: podinfo
+status:
+  appliedReferenceGeneration: 1 <5>
+  appliedReferenceRevision: 6.14.0@sha256:476bed61733536f99e7331b0fe4cc9fd70bc6497a855ad38ba49b72de50c1132
+  conditions: <6>
+  - message: CustomResourceDefinition is ready
+    reason: CustomResourceDefinitionReady
+    status: "True"
+    type: Ready
+----
+<1> Name is unique and if used in the CRD group it ensures that the generated CRD is unique in the cluster.
+The generated name should be namespaced under a domain that does not conflict.
+`$NAME.helmetica-bundles.io`
+<2> Allows overridding the generated CRD name and group.
+<3> Reference to the OCIRepository resource that contains the Helm chart.
+<4> Reference to the ImageRepository resource that discovers the Helm chart versions.
+This is used to generate the enum for the `.spec.version` field in the CRD.
+If left empty, the `.spec.version` field will be a string without any validation.
+<5> The generation and revision of the referenced OCIRepository resource that was used to generate the CRD.
+<6> The conditions of the generated CRD resource.
+Shows any errors that occurred during generation and the readiness of the generated CRD.
+
+#### FluxCD resources
+
+The FluxCD resources used in the example above are defined as follows:
+
+[source,yaml]
+----
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: podinfo-v6
+spec:
+  interval: 5m
+  provider: generic
+  ref:
+    semver: 6.x <1>
+  url: oci://ghcr.io/stefanprodan/charts/podinfo
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: podinfo
+spec:
+  exclusionList:
+  - ^.*\.sig$
+  - ^sha256-.+$
+  image: ghcr.io/stefanprodan/charts/podinfo
+  interval: 5m
+  provider: generic
+----
+<1> For production use the semver should be set to a major version range to avoid breaking changes in the generated CRD.
+The applied CRD will be checked for (accidental) breaking changes and will be rejected if the OpenAPI schema has changed in a way that is not backwards compatible.
+Because of the breaking change detection, it is safe to use a semver range that allows for minor and patch version updates.
+Users that want a specifig version for testing purposes can create a new `OCIRepository` plus `CustomResourceDefinitionSource` resource with a specific version to generate a CRD for that version.
+
+### Implementation
+
+The controller watches `CustomResourceDefinitionSource` resources and their referenced `OCIRepository` and `ImageRepository` resources.
+
+On reconcile the controller will:
+- Download the Helm chart from the referenced `OCIRepository` resource.
+- Unpack the chart and read the `values.yaml` file.
+- Generate a CRD with an OpenAPI schema based on the `values.yaml` file.
+- If an `ImageRepository` resource is referenced
+  - Download the chart versions from the `ImageRepository`
+  - Filters versions based on the chart version `~MAJOR, <= VERSION`
+  - Generate an enum for the `.spec.version` field in the CRD based on the filtered versions.
+- If a CRD with the same name already exists
+  - Compare the OpenAPI schema of the existing CRD with the generated one.
+  - If the schema has changed in a way that is not backwards compatible, reject the update and report an error in the `CustomResourceDefinitionSource` status.
+- Update the existing CRD with the new schema.
