@@ -1,6 +1,7 @@
 package v1
 
 import (
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -8,6 +9,13 @@ import (
 type CustomResourceDefinitionSourceSpec struct {
 	// Reference is a reference to the source of the bundle.
 	Reference SourceReference `json:"reference"`
+
+	// CRDNames is the `.spec.names` field of the generated [apiextv1.CustomResourceDefinition].
+	// If not set takes the name from the chart's metadata or falls back to the default `Instance` kind.
+	// Please note that changing this field generates a new CRD and does not update the existing one.
+	// The old CRD will be left in the cluster and must be removed manually.
+	// +optional
+	CRDNames apiextv1.CustomResourceDefinitionNames `json:"crdNames,omitempty"`
 
 	// VersionDiscovery defines how to discover the version of the source.
 	// +optional

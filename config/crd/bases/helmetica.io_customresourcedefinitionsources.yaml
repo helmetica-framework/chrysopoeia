@@ -54,6 +54,55 @@ spec:
             description: CustomResourceDefinitionSourceSpec defines the desired state
               of CustomResourceDefinitionSource.
             properties:
+              crdNames:
+                description: |-
+                  CRDNames is the `.spec.names` field of the generated [apiextv1.CustomResourceDefinition].
+                  If not set takes the name from the chart's metadata or falls back to the default `Instance` kind.
+                  Please note that changing this field generates a new CRD and does not update the existing one.
+                  The old CRD will be left in the cluster and must be removed manually.
+                properties:
+                  categories:
+                    description: |-
+                      categories is a list of grouped resources this custom resource belongs to (e.g. 'all').
+                      This is published in API discovery documents, and used by clients to support invocations like
+                      `kubectl get all`.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  kind:
+                    description: |-
+                      kind is the serialized kind of the resource. It is normally CamelCase and singular.
+                      Custom resource instances will use this value as the `kind` attribute in API calls.
+                    type: string
+                  listKind:
+                    description: listKind is the serialized kind of the list for this
+                      resource. Defaults to "`kind`List".
+                    type: string
+                  plural:
+                    description: |-
+                      plural is the plural name of the resource to serve.
+                      The custom resources are served under `/apis/<group>/<version>/.../<plural>`.
+                      Must match the name of the CustomResourceDefinition (in the form `<names.plural>.<group>`).
+                      Must be all lowercase.
+                    type: string
+                  shortNames:
+                    description: |-
+                      shortNames are short names for the resource, exposed in API discovery documents,
+                      and used by clients to support invocations like `kubectl get <shortname>`.
+                      It must be all lowercase.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  singular:
+                    description: singular is the singular name of the resource. It
+                      must be all lowercase. Defaults to lowercased `kind`.
+                    type: string
+                required:
+                - kind
+                - plural
+                type: object
               reference:
                 description: Reference is a reference to the source of the bundle.
                 properties:

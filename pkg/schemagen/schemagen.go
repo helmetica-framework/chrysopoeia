@@ -34,7 +34,12 @@ const CRDPluralAnnotation = "crd.bundle.appcat.io/plural"
 //
 // Warning: Currently all untagged null values in the values.yaml file are assumed to be strings.
 // This may lead to incorrect schema generation for fields that are actually of a different type.
-func GenerateCRD(chart chartv2.Chart) (apiextv1.CustomResourceDefinition, error) {
+func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomResourceDefinition, error) {
+	o := &generateOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+
 	var valuesYaml []byte
 	for _, f := range chart.Raw {
 		if f.Name == "values.yaml" {
@@ -53,20 +58,27 @@ func GenerateCRD(chart chartv2.Chart) (apiextv1.CustomResourceDefinition, error)
 
 	var crd apiextv1.CustomResourceDefinition
 	crd.SetGroupVersionKind(apiextv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
-	names, err := names(chart)
-	if err != nil {
-		return apiextv1.CustomResourceDefinition{}, err
-	}
-	crd.Spec.Names = names
 
-	// https://github.com/helm/helm/blob/af25d22902ef9fdbf7c667f3a0744a8f5a9a8fc3/pkg/registry/client.go#L800
-	semver, err := semver.StrictNewVersion(strings.ReplaceAll(chart.Metadata.Version, "_", "+"))
-	if err != nil {
-		return apiextv1.CustomResourceDefinition{}, fmt.Errorf("invalid strict chart version: %s", chart.Metadata.Version)
+	crd.Spec.Names = o.names
+	if crd.Spec.Names.Kind == "" || crd.Spec.Names.Plural == "" {
+		names, err := names(chart)
+		if err != nil {
+			return apiextv1.CustomResourceDefinition{}, err
+		}
+		crd.Spec.Names = names
 	}
-	group := fmt.Sprintf("v%d.%s.bundles.appcat.io", semver.Major(), chart.Name())
-	crd.Name = fmt.Sprintf("%s.%s", names.Plural, group)
-	crd.Spec.Group = group
+
+	crd.Spec.Group = o.group
+	if crd.Spec.Group == "" {
+		// https://github.com/helm/helm/blob/af25d22902ef9fdbf7c667f3a0744a8f5a9a8fc3/pkg/registry/client.go#L800
+		semver, err := semver.StrictNewVersion(strings.ReplaceAll(chart.Metadata.Version, "_", "+"))
+		if err != nil {
+			return apiextv1.CustomResourceDefinition{}, fmt.Errorf("invalid strict chart version: %s", chart.Metadata.Version)
+		}
+		crd.Spec.Group = fmt.Sprintf("v%d.%s.bundles.appcat.io", semver.Major(), chart.Name())
+	}
+
+	crd.Name = fmt.Sprintf("%s.%s", crd.Spec.Names.Plural, crd.Spec.Group)
 	crd.Spec.Scope = apiextv1.NamespaceScoped
 	crd.Spec.Versions = []apiextv1.CustomResourceDefinitionVersion{
 		{
@@ -262,4 +274,26 @@ func downloadChart(chartRef string) (string, error) {
 	}
 
 	return filePath, nil
+}
+
+type generateOptions struct {
+	group string
+	names apiextv1.CustomResourceDefinitionNames
+}
+
+// GenerateOption is a function that modifies the options for generating a CRD.
+type GenerateOption func(*generateOptions)
+
+// WithGroup sets the group for the generated CRD.
+func WithGroup(group string) GenerateOption {
+	return func(o *generateOptions) {
+		o.group = group
+	}
+}
+
+// WithNames sets the names for the generated CRD.
+func WithNames(names apiextv1.CustomResourceDefinitionNames) GenerateOption {
+	return func(o *generateOptions) {
+		o.names = names
+	}
 }

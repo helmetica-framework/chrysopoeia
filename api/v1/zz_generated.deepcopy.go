@@ -14,7 +14,7 @@ func (in *CustomResourceDefinitionSource) DeepCopyInto(out *CustomResourceDefini
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	out.Spec = in.Spec
+	in.Spec.DeepCopyInto(&out.Spec)
 	in.Status.DeepCopyInto(&out.Status)
 }
 
@@ -72,6 +72,7 @@ func (in *CustomResourceDefinitionSourceList) DeepCopyObject() runtime.Object {
 func (in *CustomResourceDefinitionSourceSpec) DeepCopyInto(out *CustomResourceDefinitionSourceSpec) {
 	*out = *in
 	out.Reference = in.Reference
+	in.CRDNames.DeepCopyInto(&out.CRDNames)
 	out.VersionDiscovery = in.VersionDiscovery
 }
 

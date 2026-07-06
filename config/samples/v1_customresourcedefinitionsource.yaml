@@ -28,12 +28,15 @@ metadata:
   labels:
     app.kubernetes.io/name: chrysopoeia
     app.kubernetes.io/managed-by: kustomize
-  name: podinfo-v6
+  name: v6.podinfo
 spec:
   reference:
     apiVersion: source.toolkit.fluxcd.io/v1
     kind: OCIRepository
     name: podinfo-v6
+  crdNames:
+    kind: PodInfo
+    plural: podinfos
   versionDiscovery:
     reference:
       apiVersion: image.toolkit.fluxcd.io/v1

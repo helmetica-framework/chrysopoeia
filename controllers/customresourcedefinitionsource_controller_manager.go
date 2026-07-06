@@ -154,7 +154,9 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 		return ctrl.Result{}, err
 	}
 
-	crd, err := schemagen.GenerateCRD(*chart)
+	crd, err := schemagen.GenerateCRD(*chart,
+		schemagen.WithGroup(fmt.Sprintf("%s.helmetica-bundles.io", source.Name)),
+		schemagen.WithNames(source.Spec.CRDNames))
 	if err != nil {
 		l.Error(err, "Failed to generate CRD from chart", "ArtifactURL", chartURL)
 		statusCondition.Reason = "CRDGenerationFailed"

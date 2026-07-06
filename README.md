@@ -14,7 +14,8 @@ kubectl apply -k config/samples
 
 make run
 
-kubectl get crds instances.v6.podinfo.bundles.appcat.io
+kubectl get -k config/samples
+kubectl get crds podinfos.v6.podinfo.helmetica-bundles.io
 ```
 
 ## Libraries
