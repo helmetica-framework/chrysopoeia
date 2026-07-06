@@ -49,6 +49,12 @@ type CustomResourceDefinitionSourceManager struct {
 }
 
 //+kubebuilder:rbac:groups=chrysopoeia.io,resources=customresourcedefinitionsources,verbs=get;list;watch
+//+kubebuilder:rbac:groups=chrysopoeia.io,resources=customresourcedefinitionsources/status,verbs=get;update;patch
+
+//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch;create;update;patch
+
+//+kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch
+//+kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch
 
 func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, req reconcile.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("CustomResourceDefinitionSourceManager.Reconcile")

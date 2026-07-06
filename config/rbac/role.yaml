@@ -5,9 +5,44 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - chrysopoeia.io
   resources:
   - customresourcedefinitionsources
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - chrysopoeia.io
+  resources:
+  - customresourcedefinitionsources/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - image.toolkit.fluxcd.io
+  resources:
+  - imagerepositories
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - ocirepositories
   verbs:
   - get
   - list
