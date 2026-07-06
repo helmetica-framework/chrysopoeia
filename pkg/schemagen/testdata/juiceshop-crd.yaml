@@ -55,12 +55,6 @@ spec:
                                 type: integer
                               hookDeletePolicy:
                                 type: string
-                              sleepSeconds:
-                                nullable: true
-                                type: string
-                              ttlSecondsAfterFinished:
-                                nullable: true
-                                type: string
                             type: object
                         type: object
                       preInstall:
@@ -72,12 +66,6 @@ spec:
                               exitCode:
                                 type: integer
                               hookDeletePolicy:
-                                type: string
-                              sleepSeconds:
-                                nullable: true
-                                type: string
-                              ttlSecondsAfterFinished:
-                                nullable: true
                                 type: string
                             type: object
                         type: object
@@ -142,12 +130,6 @@ spec:
                           chart appVersion.
                         type: string
                     type: object
-                  imagePullSecrets:
-                    description: 'This is for the secrets for pulling an image from
-                      a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/'
-                    items:
-                      type: string
-                    type: array
                   ingress:
                     description: 'This block is for setting up the ingress for more
                       information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/'
@@ -176,10 +158,6 @@ spec:
                                 type: object
                               type: array
                           type: object
-                        type: array
-                      tls:
-                        items:
-                          type: string
                         type: array
                     type: object
                   livenessProbe:
@@ -272,17 +250,6 @@ spec:
                         operator:
                           type: string
                       type: object
-                    type: array
-                  volumeMounts:
-                    description: Additional volumeMounts on the output Deployment
-                      definition.
-                    items:
-                      type: string
-                    type: array
-                  volumes:
-                    description: Additional volumes on the output Deployment definition.
-                    items:
-                      type: string
                     type: array
                 type: object
               version:

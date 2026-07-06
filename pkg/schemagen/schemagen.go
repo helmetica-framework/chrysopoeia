@@ -159,12 +159,23 @@ func valuesSchema(rawValues []byte) (apiextv1.JSONSchemaProps, error) {
 	if err != nil {
 		return apiextv1.JSONSchemaProps{}, err
 	}
-	return schemaProps, nil
+	if schemaProps == nil {
+		return apiextv1.JSONSchemaProps{}, fmt.Errorf("top-level YAML node returned nil schema")
+	}
+	return *schemaProps, nil
 }
 
-func convertYAMLNodeToJSONSchema(node *yaml.Node, path string) (apiextv1.JSONSchemaProps, error) {
+// convertYAMLNodeToJSONSchema converts a YAML node to a JSON schema.
+// The path parameter is used for error reporting and should be the path to the current node in the YAML document.
+// The function handles mapping nodes, sequence nodes, and scalar nodes. It also handles alias nodes by resolving them to their target node.
+// For mapping nodes, it recursively converts each key-value pair to a JSON schema property.
+// For sequence nodes, it converts the first element to a JSON schema item and assumes that all elements are of the same type.
+// For scalar nodes, it determines the JSON schema type based on the YAML tag and returns a JSON schema with that type.
+// The function can return a nil schema without an error if the input node is nil or the node type can't be determined.
+// In this case, the caller should handle the nil schema appropriately.
+func convertYAMLNodeToJSONSchema(node *yaml.Node, path string) (*apiextv1.JSONSchemaProps, error) {
 	if node == nil {
-		return apiextv1.JSONSchemaProps{Type: "object"}, nil
+		return nil, nil
 	}
 
 	switch node.Kind {
@@ -181,38 +192,45 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string) (apiextv1.JSONSch
 			}
 			valueSchema, err := convertYAMLNodeToJSONSchema(valueNode, path+"."+keyNode.Value)
 			if err != nil {
-				return apiextv1.JSONSchemaProps{}, fmt.Errorf("at %s: %s", path, err)
+				return nil, fmt.Errorf("at %s: %s", path, err)
 			}
-			valueSchema.Description = stripComment(keyNode.HeadComment)
-			props[keyNode.Value] = valueSchema
+			if valueSchema != nil {
+				valueSchema.Description = stripComment(keyNode.HeadComment)
+				props[keyNode.Value] = *valueSchema
+			}
 		}
 
-		return apiextv1.JSONSchemaProps{
+		return &apiextv1.JSONSchemaProps{
 			Type:       "object",
 			Properties: props,
 		}, nil
 
 	case yaml.SequenceNode:
-		items := apiextv1.JSONSchemaProps{Type: "string"}
+		var items *apiextv1.JSONSchemaProps
 		if len(node.Content) > 0 {
 			var err error
 			items, err = convertYAMLNodeToJSONSchema(node.Content[0], path+"[0]")
 			if err != nil {
-				return apiextv1.JSONSchemaProps{}, fmt.Errorf("at %s: %s", path, err)
+				return nil, fmt.Errorf("at %s: %s", path, err)
 			}
 		}
 
-		return apiextv1.JSONSchemaProps{
+		if items == nil {
+			fmt.Fprintf(os.Stderr, "WARNING: Skipping array with non-discoverable item type at %s.\n", path)
+			return nil, nil
+		}
+
+		return &apiextv1.JSONSchemaProps{
 			Type: "array",
 			Items: &apiextv1.JSONSchemaPropsOrArray{
-				Schema: &items,
+				Schema: items,
 			},
 		}, nil
 
 	case yaml.ScalarNode:
 		if node.Tag == "!!null" {
-			fmt.Fprintf(os.Stderr, "WARNING: Assuming string for null type at %s\n", path)
-			return apiextv1.JSONSchemaProps{Nullable: true, Type: "string"}, nil
+			fmt.Fprintf(os.Stderr, "WARNING: Skipping key with non-discoverable type at %s, use yaml tags (`key: !!type`) to specify the type.\n", path)
+			return nil, nil
 		}
 
 		var schemaType string
@@ -226,14 +244,14 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string) (apiextv1.JSONSch
 		case "!!str":
 			schemaType = "string"
 		default:
-			return apiextv1.JSONSchemaProps{}, fmt.Errorf("unsupported YAML scalar tag: %s", node.Tag)
+			return nil, fmt.Errorf("unsupported YAML scalar tag: %s", node.Tag)
 		}
 
-		return apiextv1.JSONSchemaProps{
+		return &apiextv1.JSONSchemaProps{
 			Type: schemaType,
 		}, nil
 	default:
-		return apiextv1.JSONSchemaProps{}, fmt.Errorf("unsupported YAML node kind: %v", node.Kind)
+		return nil, fmt.Errorf("unsupported YAML node kind: %v", node.Kind)
 	}
 }
 

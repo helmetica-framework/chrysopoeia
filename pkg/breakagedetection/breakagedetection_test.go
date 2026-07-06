@@ -23,7 +23,6 @@ func TestCheck(t *testing.T) {
 		warnings, errors := breakagedetection.Check(original, updated)
 		assert.ElementsMatch(t, []string{
 			"spec.values.config.server.port: Type has changed from integer to string",
-			"spec.values.emptyArrayWithAddedType.[0]: Type has changed from string to boolean",
 			"spec.values.inArray.[0].value: Type has changed from integer to string",
 			"spec.values.removedKey: Property has been removed",
 		}, errors)
@@ -34,7 +33,7 @@ func TestCheck(t *testing.T) {
 		warnings, errors := breakagedetection.Check(updated, original)
 		assert.Equal(t, []string{
 			"spec.values.config.server.port: Type has changed from string to integer",
-			"spec.values.emptyArrayWithAddedType.[0]: Type has changed from boolean to string",
+			"spec.values.emptyArrayWithAddedType: Property has been removed",
 			"spec.values.inArray.[0].value: Type has changed from string to integer",
 		}, errors)
 		assert.Empty(t, warnings)
