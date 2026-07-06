@@ -3,6 +3,7 @@ package controllers
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -210,7 +211,7 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 			return ctrl.Result{}, fmt.Errorf("failed to fetch tags from image reflector controller: status code %d", resp.StatusCode)
 		}
 
-		tags, err := parseTagsTxt(resp.Body)
+		tags, err := parseTagsTxt(resp.Body, strings.TrimPrefix(versionDiscoveryRepo.Status.LastScanResult.Revision, "sha256:"))
 		if err != nil {
 			l.Error(err, "Failed to parse tags from image reflector controller", "URL", url.String())
 			statusCondition.Reason = "VersionDiscoveryParseFailed"
@@ -419,8 +420,10 @@ func imageRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client) fun
 	}
 }
 
-func parseTagsTxt(r io.Reader) ([]*semver.Version, error) {
-	br := bufio.NewReader(r)
+func parseTagsTxt(r io.Reader, expectedSHA256 string) ([]*semver.Version, error) {
+	sha256 := sha256.New()
+
+	br := bufio.NewReader(io.TeeReader(r, sha256))
 	var tags []*semver.Version
 
 	more := true
@@ -442,6 +445,11 @@ func parseTagsTxt(r io.Reader) ([]*semver.Version, error) {
 	slices.SortFunc(tags, func(a, b *semver.Version) int {
 		return b.Compare(a)
 	})
+
+	actualSHA256 := fmt.Sprintf("%x", sha256.Sum(nil))
+	if actualSHA256 != expectedSHA256 {
+		return nil, fmt.Errorf("SHA256 mismatch: expected %s, got %s", expectedSHA256, actualSHA256)
+	}
 
 	return tags, nil
 }
