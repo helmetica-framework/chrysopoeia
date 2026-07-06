@@ -162,3 +162,19 @@ tolerations:
   effect: "NoSchedule"
 
 affinity: {}
+
+hooks:
+  preInstall:
+    job:
+      enabled: false
+      hookDeletePolicy: hook-succeeded,hook-failed
+      ttlSecondsAfterFinished:
+      sleepSeconds:
+      exitCode: 0
+  postInstall:
+    job:
+      enabled: false
+      hookDeletePolicy: hook-succeeded,hook-failed
+      ttlSecondsAfterFinished:
+      sleepSeconds:
+      exitCode: 0

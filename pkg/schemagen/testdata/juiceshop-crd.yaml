@@ -43,6 +43,45 @@ spec:
                     type: object
                   fullnameOverride:
                     type: string
+                  hooks:
+                    properties:
+                      postInstall:
+                        properties:
+                          job:
+                            properties:
+                              enabled:
+                                type: boolean
+                              exitCode:
+                                type: integer
+                              hookDeletePolicy:
+                                type: string
+                              sleepSeconds:
+                                nullable: true
+                                type: string
+                              ttlSecondsAfterFinished:
+                                nullable: true
+                                type: string
+                            type: object
+                        type: object
+                      preInstall:
+                        properties:
+                          job:
+                            properties:
+                              enabled:
+                                type: boolean
+                              exitCode:
+                                type: integer
+                              hookDeletePolicy:
+                                type: string
+                              sleepSeconds:
+                                nullable: true
+                                type: string
+                              ttlSecondsAfterFinished:
+                                nullable: true
+                                type: string
+                            type: object
+                        type: object
+                    type: object
                   httpRoute:
                     description: |-
                       -- Expose the service via gateway-api HTTPRoute
