@@ -220,6 +220,17 @@ func runController(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("unable to create CustomResourceDefinitionSource controller: %w", err)
 	}
 
+	imm := &controllers.InstanceManagerManager{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder("instance-manager-manager"),
+
+		ControllerLifetimeCtx: lifetimeCtx,
+	}
+	if err := imm.SetupWithManager("instance-manager-manager", mgr); err != nil {
+		return fmt.Errorf("unable to create InstanceManagerManager controller: %w", err)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {
