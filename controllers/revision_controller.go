@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-type InstanceManager struct {
+type RevisionManager struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
@@ -27,8 +27,8 @@ type InstanceManager struct {
 
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
-func (r *InstanceManager) Reconcile(ctx context.Context, req InstanceRequest) (res ctrl.Result, err error) {
-	l := log.FromContext(ctx).WithName("InstanceManager.Reconcile").WithValues("request", req)
+func (r *RevisionManager) Reconcile(ctx context.Context, req InstanceRequest) (res ctrl.Result, err error) {
+	l := log.FromContext(ctx).WithName("RevisionManager.Reconcile").WithValues("request", req)
 	l.Info("Reconciling Instance")
 
 	var instance unstructured.Unstructured

@@ -17,12 +17,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-type InstanceManagerManager struct {
+const revisionControllerFinalizer = "chrysopoeia.io/revision-controller-cleanup"
+
+type RevisionManagerManager struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
@@ -39,8 +42,8 @@ type InstanceManagerManager struct {
 }
 
 type controllersKey struct {
-	APIVersion string
-	Kind       string
+	Group string
+	Kind  string
 }
 
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
@@ -51,8 +54,8 @@ type controllersKey struct {
 //     keep this design but do actually instantiate a cache per controller.
 //   - Or we can partially shutdown the cache and don't need this whole thing. We switch to a single controller with just
 //     dynamic watches and a bit of mapping magic.
-func (r *InstanceManagerManager) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
-	l := log.FromContext(ctx).WithName("InstanceManagerManager.Reconcile")
+func (r *RevisionManagerManager) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	l := log.FromContext(ctx).WithName("RevisionManagerManager.Reconcile")
 	l.Info("Reconciling Instance")
 
 	var instance apiextv1.CustomResourceDefinition
@@ -63,9 +66,18 @@ func (r *InstanceManagerManager) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 	if !instance.GetDeletionTimestamp().IsZero() {
-		// BIG FAT TODO: Shutdown controller for this resource if it exists.
 		l.Info("Instance is being deleted, stopping controller")
-		return ctrl.Result{}, nil
+		gvk, err := extractGroupVersionKindFromCRD(instance)
+		if err != nil {
+			l.Error(err, "Failed to extract GVK from CRD")
+			return ctrl.Result{}, err
+		}
+		if err := r.stopAndRemoveControllerFor(gvk); err != nil {
+			l.Error(err, "Failed to stop and remove controller for instance")
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, r.removeFinalizer(ctx, &instance)
 	}
 
 	var established bool
@@ -80,11 +92,19 @@ func (r *InstanceManagerManager) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	for _, version := range instance.Spec.Versions {
-		if !version.Served {
-			continue
-		}
-		r.ensureInstanceControllerFor(ctx, instance.Spec.Group, version.Name, instance.Spec.Names.Kind)
+	gvk, err := extractGroupVersionKindFromCRD(instance)
+	if err != nil {
+		l.Error(err, "Failed to extract GVK from CRD")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.addFinalizer(ctx, &instance); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to add finalizer: %w", err)
+	}
+
+	if err := r.ensureInstanceControllerFor(ctx, gvk); err != nil {
+		l.Error(err, "Failed to ensure instance controller")
+		return ctrl.Result{}, err
 	}
 
 	l.Info("Finished reconciling")
@@ -92,7 +112,45 @@ func (r *InstanceManagerManager) Reconcile(ctx context.Context, req ctrl.Request
 	return ctrl.Result{}, nil
 }
 
-func (r *InstanceManagerManager) SetupWithManager(name string, mgr ctrl.Manager) error {
+func (r *RevisionManagerManager) addFinalizer(ctx context.Context, instance *apiextv1.CustomResourceDefinition) error {
+	if controllerutil.AddFinalizer(instance, revisionControllerFinalizer) {
+		if err := r.Update(ctx, instance); err != nil {
+			return fmt.Errorf("failed to patch finalizer: %w", err)
+		}
+	}
+	return nil
+}
+
+func (r *RevisionManagerManager) removeFinalizer(ctx context.Context, instance *apiextv1.CustomResourceDefinition) error {
+	if controllerutil.RemoveFinalizer(instance, revisionControllerFinalizer) {
+		if err := r.Patch(ctx, instance, client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"finalizers":[]}}`))); err != nil {
+			return fmt.Errorf("failed to patch finalizer: %w", err)
+		}
+	}
+	return nil
+}
+
+func extractGroupVersionKindFromCRD(crd apiextv1.CustomResourceDefinition) (schema.GroupVersionKind, error) {
+	group := crd.Spec.Group
+	kind := crd.Spec.Names.Kind
+	var version string
+	for _, v := range crd.Spec.Versions {
+		if v.Storage {
+			version = v.Name
+			break
+		}
+	}
+	if version == "" {
+		return schema.GroupVersionKind{}, errors.New("CRD has no storage version")
+	}
+	return schema.GroupVersionKind{
+		Group:   group,
+		Version: version,
+		Kind:    kind,
+	}, nil
+}
+
+func (r *RevisionManagerManager) SetupWithManager(name string, mgr ctrl.Manager) error {
 	r.manager = mgr
 	return builder.ControllerManagedBy(mgr).
 		For(&apiextv1.CustomResourceDefinition{}).
@@ -100,10 +158,10 @@ func (r *InstanceManagerManager) SetupWithManager(name string, mgr ctrl.Manager)
 		Complete(r)
 }
 
-func (r *InstanceManagerManager) ensureInstanceControllerFor(ctx context.Context, group, version, kind string) error {
+func (r *RevisionManagerManager) ensureInstanceControllerFor(ctx context.Context, gvk schema.GroupVersionKind) error {
 	key := controllersKey{
-		APIVersion: group + "/" + version,
-		Kind:       kind,
+		Group: gvk.Group,
+		Kind:  gvk.Kind,
 	}
 
 	r.controllersMux.Lock()
@@ -113,17 +171,17 @@ func (r *InstanceManagerManager) ensureInstanceControllerFor(ctx context.Context
 		return nil
 	}
 
-	l := log.FromContext(ctx).WithName("InstanceManagerManager.ensureInstanceControllerFor").WithValues("group", group, "version", version, "kind", kind)
+	l := log.FromContext(ctx).WithName("RevisionManagerManager.ensureInstanceControllerFor").WithValues("gvk", gvk)
 	l.Info("Creating new controller for resource")
 
 	instanceCtrlCtx, instanceCtrlCancel := context.WithCancel(r.ControllerLifetimeCtx)
-	reconciler := &InstanceManager{
+	reconciler := &RevisionManager{
 		Client:   r.Client,
 		Scheme:   r.Scheme,
 		Recorder: r.Recorder,
 	}
 	dynCtrl, err := controller.NewTypedUnmanaged(
-		"instance-controller-"+group+"-"+version+"-"+kind,
+		"instance-controller-"+gvk.Group+"-"+gvk.Version+"-"+gvk.Kind,
 		controller.TypedOptions[InstanceRequest]{
 			// It's fine to re-use the same metric on CRD recreate
 			SkipNameValidation: new(true),
@@ -142,16 +200,12 @@ func (r *InstanceManagerManager) ensureInstanceControllerFor(ctx context.Context
 	}
 
 	target := &unstructured.Unstructured{}
-	target.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   group,
-		Version: version,
-		Kind:    kind,
-	})
+	target.SetGroupVersionKind(gvk)
 
 	if err := dynCtrl.Watch(source.TypedKind(r.manager.GetCache(), client.Object(target), handler.TypedEnqueueRequestsFromMapFunc(func(_ context.Context, o client.Object) []InstanceRequest {
 		return []InstanceRequest{{
-			APIVersion: group + "/" + version,
-			Kind:       kind,
+			APIVersion: gvk.GroupVersion().String(),
+			Kind:       gvk.Kind,
 			NamespacedName: types.NamespacedName{
 				Name:      o.GetName(),
 				Namespace: o.GetNamespace(),
@@ -178,7 +232,12 @@ func (r *InstanceManagerManager) ensureInstanceControllerFor(ctx context.Context
 	return nil
 }
 
-func (r *InstanceManagerManager) stopAndRemoveControllerFor(key controllersKey) error {
+func (r *RevisionManagerManager) stopAndRemoveControllerFor(gvk schema.GroupVersionKind) error {
+	key := controllersKey{
+		Group: gvk.Group,
+		Kind:  gvk.Kind,
+	}
+
 	r.controllersMux.Lock()
 	defer r.controllersMux.Unlock()
 	_, ok := r.controllers[key]
@@ -192,12 +251,19 @@ func (r *InstanceManagerManager) stopAndRemoveControllerFor(key controllersKey) 
 	}
 	rc.stop()
 	delete(r.controllers, key)
+
+	var obj unstructured.Unstructured
+	obj.SetGroupVersionKind(gvk)
+	if err := r.manager.GetCache().RemoveInformer(context.TODO(), &obj); err != nil {
+		return fmt.Errorf("failed to remove informer: %w", err)
+	}
+
 	return nil
 }
 
 type instanceController struct {
 	ctrl       controller.TypedController[InstanceRequest]
-	reconciler *InstanceManager
+	reconciler *RevisionManager
 	stop       func()
 
 	// done is closed when the controller is stopped or fails to start.
