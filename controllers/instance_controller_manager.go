@@ -45,6 +45,12 @@ type controllersKey struct {
 
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
+// TODO: This is all rather sloppily copied from espejote.
+// The code/concept as is does not make much sense currently:
+//   - We either find out for nice shutdowns on CRD deletion we need to instantiate a cache per controller and
+//     keep this design but do actually instantiate a cache per controller.
+//   - Or we can partially shutdown the cache and don't need this whole thing. We switch to a single controller with just
+//     dynamic watches and a bit of mapping magic.
 func (r *InstanceManagerManager) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("InstanceManagerManager.Reconcile")
 	l.Info("Reconciling Instance")
