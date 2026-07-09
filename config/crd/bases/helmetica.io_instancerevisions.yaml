@@ -15,6 +15,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.ociUrl
+      name: URL
+      type: string
     - jsonPath: .spec.version
       name: Version
       type: string

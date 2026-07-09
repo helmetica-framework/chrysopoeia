@@ -7,33 +7,40 @@ import (
 	"fmt"
 	"strings"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 type RevisionManager struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
+
+	// GVK is the GroupVersionKind of the resource that this controller manages.
+	// The controller is dynamically created for each GVK that is registered with the RevisionManagerManager.
+	GVK schema.GroupVersionKind
 }
 
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
-func (r *RevisionManager) Reconcile(ctx context.Context, req InstanceRequest) (res ctrl.Result, err error) {
+func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("RevisionManager.Reconcile").WithValues("request", req)
 	l.Info("Reconciling Instance")
 
 	var instance unstructured.Unstructured
-	instance.SetAPIVersion(req.APIVersion)
-	instance.SetKind(req.Kind)
+	instance.SetAPIVersion(r.GVK.GroupVersion().String())
+	instance.SetKind(r.GVK.Kind)
 	if err := r.Get(ctx, req.NamespacedName, &instance); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -60,13 +67,25 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req InstanceRequest) (r
 		return ctrl.Result{}, err
 	}
 
+	ociRepo, err := r.ensureOCIRepository(ctx, instance, ociUrl, version)
+	if err != nil {
+		l.Error(err, "Failed to ensure OCIRepository")
+		return ctrl.Result{}, err
+	}
+	if !apimeta.IsStatusConditionTrue(ociRepo.Status.Conditions, "Ready") {
+		l.Info("OCIRepository not yet ready, requeuing")
+		return ctrl.Result{}, nil
+	}
+
+	versionWithDigest := ociRepo.Status.Artifact.Revision
+
 	shaSum := sha256.New()
 
 	if _, err := shaSum.Write([]byte(ociUrl)); err != nil {
 		l.Error(err, "Failed to write ociUrl to shaSum")
 		return ctrl.Result{}, err
 	}
-	if _, err := shaSum.Write([]byte(version)); err != nil {
+	if _, err := shaSum.Write([]byte(versionWithDigest)); err != nil {
 		l.Error(err, "Failed to write version to shaSum")
 		return ctrl.Result{}, err
 	}
@@ -84,7 +103,7 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req InstanceRequest) (r
 		l.Error(err, "Failed to set controller reference")
 		return ctrl.Result{}, err
 	}
-	rev.Spec.Version = version
+	rev.Spec.Version = versionWithDigest
 	rev.Spec.OCIUrl = ociUrl
 	rev.Spec.Values.Raw, err = json.Marshal(values)
 	if err != nil {
@@ -106,9 +125,32 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req InstanceRequest) (r
 	return ctrl.Result{}, nil
 }
 
-type InstanceRequest struct {
-	APIVersion string
-	Kind       string
+// ensureOCIRepository ensures that an OCIRepository exists for the given instance and returns it.
+// callers should check the status of the returned OCIRepository to ensure that it is ready before proceeding with any further actions.
+func (r *RevisionManager) ensureOCIRepository(ctx context.Context, instance unstructured.Unstructured, ociUrl, version string) (*sourcev1.OCIRepository, error) {
+	var ociRepo sourcev1.OCIRepository
+	ociRepo.SetGroupVersionKind(sourcev1.GroupVersion.WithKind("OCIRepository"))
+	ociRepo.SetNamespace(instance.GetNamespace())
+	ociRepo.SetName(strings.Join([]string{"chrysopoeia", fmt.Sprintf("%x", sha256.Sum256([]byte(ociUrl)))[0:10], version}, "-"))
+	ociRepo.Spec.URL = ociUrl
+	ociRepo.Spec.Reference = &sourcev1.OCIRepositoryRef{Tag: version}
 
-	types.NamespacedName
+	if err := controllerutil.SetOwnerReference(&instance, &ociRepo, r.Scheme); err != nil {
+		return nil, fmt.Errorf("failed to set owner reference: %w", err)
+	}
+
+	ac, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&ociRepo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert OCIRepository to unstructured apply config: %w", err)
+	}
+
+	if err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(&unstructured.Unstructured{Object: ac}), client.FieldOwner(fmt.Sprintf("chrysopoeia-controller:%s", instance.GetName()))); err != nil {
+		return nil, fmt.Errorf("failed to apply OCIRepository: %w", err)
+	}
+
+	if err := r.Get(ctx, client.ObjectKeyFromObject(&ociRepo), &ociRepo); err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get OCIRepository: %w", err)
+	}
+
+	return &ociRepo, nil
 }

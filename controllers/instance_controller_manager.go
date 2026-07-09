@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -20,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -179,10 +182,12 @@ func (r *RevisionManagerManager) ensureInstanceControllerFor(ctx context.Context
 		Client:   r.Client,
 		Scheme:   r.Scheme,
 		Recorder: r.Recorder,
+
+		GVK: gvk,
 	}
 	dynCtrl, err := controller.NewTypedUnmanaged(
 		"instance-controller-"+gvk.Group+"-"+gvk.Version+"-"+gvk.Kind,
-		controller.TypedOptions[InstanceRequest]{
+		controller.TypedOptions[reconcile.Request]{
 			// It's fine to re-use the same metric on CRD recreate
 			SkipNameValidation: new(true),
 			Reconciler:         reconciler,
@@ -202,18 +207,17 @@ func (r *RevisionManagerManager) ensureInstanceControllerFor(ctx context.Context
 	target := &unstructured.Unstructured{}
 	target.SetGroupVersionKind(gvk)
 
-	if err := dynCtrl.Watch(source.TypedKind(r.manager.GetCache(), client.Object(target), handler.TypedEnqueueRequestsFromMapFunc(func(_ context.Context, o client.Object) []InstanceRequest {
-		return []InstanceRequest{{
-			APIVersion: gvk.GroupVersion().String(),
-			Kind:       gvk.Kind,
-			NamespacedName: types.NamespacedName{
-				Name:      o.GetName(),
-				Namespace: o.GetNamespace(),
-			},
-		}}
-	}))); err != nil {
+	if err := dynCtrl.Watch(source.TypedKind(r.manager.GetCache(), client.Object(target), &handler.TypedEnqueueRequestForObject[client.Object]{})); err != nil {
 		instanceCtrlCancel()
 		return fmt.Errorf("failed to watch target resource: %w", err)
+	}
+	if err := dynCtrl.Watch(source.TypedKind(r.manager.GetCache(), &sourcev1.OCIRepository{}, handler.TypedEnqueueRequestForOwner[*sourcev1.OCIRepository](r.manager.GetScheme(), r.manager.GetRESTMapper(), target))); err != nil {
+		instanceCtrlCancel()
+		return fmt.Errorf("failed to watch OCIRepository resource: %w", err)
+	}
+	if err := dynCtrl.Watch(source.TypedKind(r.manager.GetCache(), &chrysopoeiav1.InstanceRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.InstanceRevision](r.manager.GetScheme(), r.manager.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
+		instanceCtrlCancel()
+		return fmt.Errorf("failed to watch InstanceRevision resource: %w", err)
 	}
 
 	go func() {
@@ -262,7 +266,7 @@ func (r *RevisionManagerManager) stopAndRemoveControllerFor(gvk schema.GroupVers
 }
 
 type instanceController struct {
-	ctrl       controller.TypedController[InstanceRequest]
+	ctrl       controller.TypedController[reconcile.Request]
 	reconciler *RevisionManager
 	stop       func()
 
