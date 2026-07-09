@@ -14,6 +14,12 @@ type InstanceRevisionSpec struct {
 
 	// Values is the values of the Helm chart.
 	Values runtime.RawExtension `json:"values"`
+
+	// OCIUrl is the OCI repository URL where the service bundle is stored.
+	// TODO: This field will be changed/removed in the future to reference a Flux OCIRepository resource instead of a raw URL.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	OCIUrl string `json:"ociUrl"`
 }
 
 // InstanceRevisionStatus defines the observed state of InstanceRevision

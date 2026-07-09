@@ -46,6 +46,11 @@ spec:
           spec:
             description: InstanceRevisionSpec defines the desired state of InstanceRevision.
             properties:
+              ociUrl:
+                description: OCIUrl is the OCI repository URL where the service bundle
+                  is stored.
+                minLength: 1
+                type: string
               values:
                 description: Values is the values of the Helm chart.
                 type: object
@@ -55,6 +60,7 @@ spec:
                 minLength: 1
                 type: string
             required:
+            - ociUrl
             - values
             - version
             type: object

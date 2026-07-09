@@ -244,6 +244,15 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 		}
 
 		if spec, ok := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]; ok {
+			if ociRepoProp, ok := spec.Properties["ociUrl"]; ok {
+				urlJSON, err := json.Marshal(ociRepo.Spec.URL)
+				if err != nil {
+					l.Error(err, "Failed to marshal OCIRepository URL to JSON", "OCIRepositoryURL", ociRepo.Spec.URL)
+					return ctrl.Result{}, err
+				}
+				ociRepoProp.Default = &apiextv1.JSON{Raw: urlJSON}
+				spec.Properties["ociUrl"] = ociRepoProp
+			}
 			if versionProp, ok := spec.Properties["version"]; ok {
 				versionProp.Enum = make([]apiextv1.JSON, 0, len(tags))
 				for _, tag := range tags {

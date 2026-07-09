@@ -44,6 +44,11 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req InstanceRequest) (r
 		return ctrl.Result{}, nil
 	}
 
+	ociUrl, _, err := unstructured.NestedString(instance.Object, "spec", "ociUrl")
+	if err != nil {
+		l.Error(err, "Failed to get ociUrl from instance")
+		return ctrl.Result{}, err
+	}
 	version, _, err := unstructured.NestedString(instance.Object, "spec", "version")
 	if err != nil {
 		l.Error(err, "Failed to get version from instance")
@@ -57,6 +62,10 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req InstanceRequest) (r
 
 	shaSum := sha256.New()
 
+	if _, err := shaSum.Write([]byte(ociUrl)); err != nil {
+		l.Error(err, "Failed to write ociUrl to shaSum")
+		return ctrl.Result{}, err
+	}
 	if _, err := shaSum.Write([]byte(version)); err != nil {
 		l.Error(err, "Failed to write version to shaSum")
 		return ctrl.Result{}, err
@@ -76,6 +85,7 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req InstanceRequest) (r
 		return ctrl.Result{}, err
 	}
 	rev.Spec.Version = version
+	rev.Spec.OCIUrl = ociUrl
 	rev.Spec.Values.Raw, err = json.Marshal(values)
 	if err != nil {
 		l.Error(err, "Failed to marshal values")

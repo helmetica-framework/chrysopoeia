@@ -21,6 +21,9 @@ spec:
               desiredRevision:
                 description: The desired revision of the service.
                 type: string
+              ociRepository:
+                description: The OCI repository where the service bundle is stored.
+                type: string
               values:
                 description: This field together with the `.spec.version` field defines
                   the configuration of the service. Every change to either of these

@@ -102,6 +102,10 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 									Description: "This field together with the `.spec.version` field defines the configuration of the service. Every change to either of these two fields creates a new revision of the service.",
 									Properties:  schema.Properties,
 								},
+								"ociUrl": {
+									Type:        "string",
+									Description: "The OCI repository where the service bundle is stored.",
+								},
 								"desiredRevision": {
 									Type:        "string",
 									Description: "The desired revision of the service.",
