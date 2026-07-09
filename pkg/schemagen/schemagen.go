@@ -106,10 +106,6 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 									Type:        "string",
 									Description: "The OCI repository where the service bundle is stored.",
 								},
-								"desiredRevision": {
-									Type:        "string",
-									Description: "The desired revision of the service.",
-								},
 							},
 						},
 					},

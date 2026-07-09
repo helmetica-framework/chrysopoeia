@@ -20,6 +20,12 @@ type InstanceRevisionSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	OCIUrl string `json:"ociUrl"`
+
+	// ApprovedAt is the timestamp when the revision was approved.
+	// The newest approved revision is the one that will be used for deployment.
+	// The revision
+	// +optional
+	ApprovedAt *metav1.Time `json:"approvedAt,omitempty"`
 }
 
 // InstanceRevisionStatus defines the observed state of InstanceRevision

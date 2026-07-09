@@ -49,6 +49,13 @@ spec:
           spec:
             description: InstanceRevisionSpec defines the desired state of InstanceRevision.
             properties:
+              approvedAt:
+                description: |-
+                  ApprovedAt is the timestamp when the revision was approved.
+                  The newest approved revision is the one that will be used for deployment.
+                  The revision
+                format: date-time
+                type: string
               ociUrl:
                 description: OCIUrl is the OCI repository URL where the service bundle
                   is stored.
