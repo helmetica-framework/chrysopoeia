@@ -211,7 +211,7 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 			return ctrl.Result{}, fmt.Errorf("failed to fetch tags from image reflector controller: status code %d", resp.StatusCode)
 		}
 
-		tags, err := parseTagsTxt(resp.Body, strings.TrimPrefix(versionDiscoveryRepo.Status.LastScanResult.Revision, "sha256:"))
+		allTags, err := parseTagsTxt(resp.Body, strings.TrimPrefix(versionDiscoveryRepo.Status.LastScanResult.Revision, "sha256:"))
 		if err != nil {
 			l.Error(err, "Failed to parse tags from image reflector controller", "URL", url.String())
 			statusCondition.Reason = "VersionDiscoveryParseFailed"
@@ -219,7 +219,7 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 			return ctrl.Result{}, err
 		}
 
-		l.Info("Successfully fetched and parsed tags from image reflector controller", "URL", url.String(), "TagsCount", len(tags))
+		l.Info("Successfully fetched and parsed tags from image reflector controller", "URL", url.String(), "TagsCount", len(allTags))
 
 		chartVersion, err := semver.StrictNewVersion(strings.ReplaceAll(chart.Metadata.Version, "_", "+"))
 		if err != nil {
@@ -235,6 +235,15 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 			statusCondition.Message = fmt.Sprintf("Invalid strict chart version: %s", chart.Metadata.Version)
 			return ctrl.Result{}, err
 		}
+
+		tags := make([]*semver.Version, 0, len(allTags))
+		for _, tag := range allTags {
+			if !versionConstraint.Check(tag) {
+				continue
+			}
+			tags = append(tags, tag)
+		}
+		l.Info("Tags after filtering by chart version constraint", "ChartVersion", chartVersion.String(), "TagsCount", len(tags))
 
 		if len(crd.Spec.Versions) != 1 {
 			l.Error(nil, "CRD has more than one version, cannot apply version discovery", "CRDName", crd.Name)
@@ -254,12 +263,8 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 				spec.Properties["ociUrl"] = ociRepoProp
 			}
 			if versionProp, ok := spec.Properties["version"]; ok {
-				versionProp.Enum = make([]apiextv1.JSON, 0, len(tags))
-				for _, tag := range tags {
-					if !versionConstraint.Check(tag) {
-						l.Info("Skipping tag that does not satisfy chart version constraint", "Tag", tag.String(), "ChartVersion", chart.Metadata.Version)
-						continue
-					}
+				versionProp.Enum = make([]apiextv1.JSON, len(tags))
+				for i, tag := range tags {
 					tagJSON, err := json.Marshal(tag)
 					if err != nil {
 						l.Error(err, "Failed to marshal tag to JSON", "Tag", tag.String())
@@ -267,7 +272,10 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 						statusCondition.Message = fmt.Sprintf("Failed to marshal tag %s to JSON: %v", tag.String(), err)
 						return ctrl.Result{}, err
 					}
-					versionProp.Enum = append(versionProp.Enum, apiextv1.JSON{Raw: tagJSON})
+					versionProp.Enum[i] = apiextv1.JSON{Raw: tagJSON}
+				}
+				if len(versionProp.Enum) > 0 {
+					versionProp.Default = versionProp.Enum[0].DeepCopy()
 				}
 				spec.Properties["version"] = versionProp
 				crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"] = spec
@@ -284,7 +292,7 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 			return ctrl.Result{}, fmt.Errorf("CRD does not have a spec property, cannot apply version discovery")
 		}
 
-		l.Info("Successfully applied version discovery to CRD", "CRDName", crd.Name, "VersionsCount", len(tags))
+		l.Info("Successfully applied version discovery to CRD", "CRDName", crd.Name, "VersionsCount", len(allTags))
 	}
 
 	if crd.Labels == nil {
