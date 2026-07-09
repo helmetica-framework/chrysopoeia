@@ -17,14 +17,14 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		fmt.Println("Running port forward to source controller")
-		cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", "source-system", "svc/source-controller", "8080:80")
+		cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", "chrysopoeia-flux-system", "svc/source-controller", "8080:80")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
 	})
 	g.Go(func() error {
 		fmt.Println("Running port forward to image reflector controller")
-		cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", "image-reflector-system", "svc/image-reflector-controller-tags", "8090:8090")
+		cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", "chrysopoeia-flux-system", "svc/image-reflector-controller-tags", "8090:8090")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
