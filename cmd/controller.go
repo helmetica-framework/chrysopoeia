@@ -233,6 +233,7 @@ func runController(cmd *cobra.Command, _ []string) error {
 		ManagedReconcilers: []func() controllers.DynamicReconciler{
 			controllers.NewRevisionManager,
 			controllers.NewAutomaticApprovalManager,
+			controllers.NewReleaseController,
 		},
 	}
 	if err := imm.SetupWithManager("instance-manager-manager", mgr); err != nil {

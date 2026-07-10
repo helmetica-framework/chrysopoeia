@@ -38,6 +38,16 @@ rules:
   - patch
   - update
 - apiGroups:
+  - helm.toolkit.fluxcd.io
+  resources:
+  - helmreleases
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - helmetica.io
   resources:
   - instancerevisions
