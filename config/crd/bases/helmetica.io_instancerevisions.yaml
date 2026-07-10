@@ -66,7 +66,6 @@ spec:
                 type: string
               values:
                 description: Values is the values of the Helm chart.
-                type: object
                 x-kubernetes-preserve-unknown-fields: true
               version:
                 description: Version is the version of the Helm chart.

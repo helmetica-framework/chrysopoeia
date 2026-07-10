@@ -1,8 +1,8 @@
 package v1
 
 import (
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
 // InstanceRevisionSpec defines the desired state of InstanceRevision.
@@ -13,7 +13,7 @@ type InstanceRevisionSpec struct {
 	Version string `json:"version"`
 
 	// Values is the values of the Helm chart.
-	Values runtime.RawExtension `json:"values"`
+	Values apiextensionsv1.JSON `json:"values"`
 
 	// OCIUrl is the OCI repository URL where the service bundle is stored.
 	// TODO: This field will be changed/removed in the future to reference a Flux OCIRepository resource instead of a raw URL.

@@ -8,7 +8,6 @@ import (
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -112,7 +111,7 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 		Kind:       artifact.Kind,
 		Name:       artifact.GetName(),
 	}
-	release.Spec.Values = &apiextensionsv1.JSON{Raw: revision.Spec.Values.Raw}
+	release.Spec.Values = revision.Spec.Values.DeepCopy()
 	hrac, err := runtime.DefaultUnstructuredConverter.ToUnstructured(release)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to convert HelmRelease to unstructured: %w", err)
