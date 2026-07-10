@@ -17,9 +17,12 @@ import (
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 type RevisionManager struct {
@@ -32,7 +35,14 @@ type RevisionManager struct {
 	GVK schema.GroupVersionKind
 }
 
-//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
+//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions/status,verbs=get;update;patch
+
+//+kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;create;update;patch
+
+func NewRevisionManager() DynamicReconciler {
+	return &RevisionManager{}
+}
 
 func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("RevisionManager.Reconcile").WithValues("request", req)
@@ -122,7 +132,43 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 		return ctrl.Result{}, err
 	}
 
+	revField, _, err := unstructured.NestedString(instance.Object, "status", "latestRevision")
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get latestRevision from instance status: %w", err)
+	}
+	if revField != rev.GetName() {
+		if err := unstructured.SetNestedField(instance.Object, rev.GetName(), "status", "latestRevision"); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set latestRevision in instance status: %w", err)
+		}
+		if err := r.Status().Update(ctx, &instance); err != nil {
+			l.Error(err, "Failed to update instance status")
+			return ctrl.Result{}, err
+		}
+	}
+
 	return ctrl.Result{}, nil
+}
+
+func (r *RevisionManager) SetupDynamicControllerWithWatches(dynCtrl controller.TypedController[reconcile.Request], mgr ctrl.Manager, gvk schema.GroupVersionKind) error {
+	r.Client = mgr.GetClient()
+	r.Scheme = mgr.GetScheme()
+	r.Recorder = mgr.GetEventRecorder(fmt.Sprintf("revision-controller-%s-%s-%s", gvk.Group, gvk.Version, gvk.Kind))
+	r.GVK = gvk
+
+	target := &unstructured.Unstructured{}
+	target.SetGroupVersionKind(gvk)
+
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), client.Object(target), &handler.TypedEnqueueRequestForObject[client.Object]{})); err != nil {
+		return fmt.Errorf("failed to watch target resource: %w", err)
+	}
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &sourcev1.OCIRepository{}, handler.TypedEnqueueRequestForOwner[*sourcev1.OCIRepository](mgr.GetScheme(), mgr.GetRESTMapper(), target))); err != nil {
+		return fmt.Errorf("failed to watch OCIRepository resource: %w", err)
+	}
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.InstanceRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.InstanceRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
+		return fmt.Errorf("failed to watch InstanceRevision resource: %w", err)
+	}
+
+	return nil
 }
 
 // ensureOCIRepository ensures that an OCIRepository exists for the given instance and returns it.

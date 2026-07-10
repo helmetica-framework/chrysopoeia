@@ -34,6 +34,7 @@ type InstanceRevisionStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Approved",type="date",JSONPath=".spec.approvedAt",description=""
 //+kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.spec.ociUrl`
 //+kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.spec.version`
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description=""

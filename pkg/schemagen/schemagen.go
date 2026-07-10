@@ -85,6 +85,9 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 			Name:    "bundle",
 			Served:  true,
 			Storage: true,
+			Subresources: &apiextv1.CustomResourceSubresources{
+				Status: &apiextv1.CustomResourceSubresourceStatus{},
+			},
 			Schema: &apiextv1.CustomResourceValidation{
 				OpenAPIV3Schema: &apiextv1.JSONSchemaProps{
 					Type: "object",
@@ -93,6 +96,18 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 							Type:        "object",
 							Description: "Configures the desired state of the service.",
 							Properties: map[string]apiextv1.JSONSchemaProps{
+								"approval": {
+									Type:        "object",
+									Description: "Approval contains the approval strategy for the service.",
+									Properties: map[string]apiextv1.JSONSchemaProps{
+										"strategy": {
+											Type:        "string",
+											Description: "The approval strategy for the service. Can be either 'Automatic' or 'Manual'.",
+											Enum:        []apiextv1.JSON{{Raw: []byte(`"Automatic"`)}, {Raw: []byte(`"Manual"`)}},
+											Default:     &apiextv1.JSON{Raw: []byte(`"Automatic"`)},
+										},
+									},
+								},
 								"version": {
 									Type:        "string",
 									Description: "The version of the service. Every change to this field together with the `.spec.values` field creates a new revision of the service.",
@@ -105,6 +120,16 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 								"ociUrl": {
 									Type:        "string",
 									Description: "The OCI repository where the service bundle is stored.",
+								},
+							},
+						},
+						"status": {
+							Type:        "object",
+							Description: "Status contains the observed state of the service.",
+							Properties: map[string]apiextv1.JSONSchemaProps{
+								"latestRevision": {
+									Type:        "string",
+									Description: "The name of the revision that currently matches the spec.",
 								},
 							},
 						},

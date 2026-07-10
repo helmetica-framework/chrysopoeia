@@ -15,6 +15,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.approvedAt
+      name: Approved
+      type: date
     - jsonPath: .spec.ociUrl
       name: URL
       type: string

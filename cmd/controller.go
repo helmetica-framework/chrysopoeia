@@ -208,6 +208,10 @@ func runController(cmd *cobra.Command, _ []string) error {
 
 	lifetimeCtx := cmd.Context()
 
+	if err := controllers.SetupInstanceRevisionOwnerFieldIndex(mgr); err != nil {
+		return fmt.Errorf("unable to set up InstanceRevision owner field index: %w", err)
+	}
+
 	bsm := &controllers.CustomResourceDefinitionSourceManager{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
@@ -220,12 +224,16 @@ func runController(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("unable to create CustomResourceDefinitionSource controller: %w", err)
 	}
 
-	imm := &controllers.RevisionManagerManager{
+	imm := &controllers.DynamicReconcilerManager{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorder("instance-manager-manager"),
 
 		ControllerLifetimeCtx: lifetimeCtx,
+		ManagedReconcilers: []func() controllers.DynamicReconciler{
+			controllers.NewRevisionManager,
+			controllers.NewAutomaticApprovalManager,
+		},
 	}
 	if err := imm.SetupWithManager("instance-manager-manager", mgr); err != nil {
 		return fmt.Errorf("unable to create RevisionManagerManager controller: %w", err)

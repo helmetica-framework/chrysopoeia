@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -20,18 +18,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const revisionControllerFinalizer = "chrysopoeia.io/revision-controller-cleanup"
 
-type RevisionManagerManager struct {
+type DynamicReconciler interface {
+	reconcile.TypedReconciler[reconcile.Request]
+	SetupDynamicControllerWithWatches(dynCtrl controller.TypedController[reconcile.Request], mgr ctrl.Manager, gvk schema.GroupVersionKind) error
+}
+
+// DynamicReconcilerManager reacts to the creation of new CRDs and creates a new controller for each GVK that is registered with it. It also stops the controller when the CRD is deleted.
+// TODO: No supervision of the controllers is done, if a controller fails to start or crashes it will not be restarted.
+// Normally the controller just exits and K8s will restart the pod, but here we probably don't want to influence other running controllers if one resource is faulty.
+// For the PoC it is good enough I think since most startup error are probably due to bugs in code and will be fixed within the development cycle.
+type DynamicReconcilerManager struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
+
+	ManagedReconcilers []func() DynamicReconciler
 
 	ControllerLifetimeCtx context.Context
 
@@ -41,7 +48,23 @@ type RevisionManagerManager struct {
 	// While this controller does not access the map concurrently the metrics collector does.
 	controllersMux sync.Mutex
 	// controllers holds the actual reconcilers, one for each managed resource.
-	controllers map[controllersKey]*instanceController
+	controllers map[controllersKey]stopper
+}
+
+type stopper struct {
+	ctrls []*instanceController
+}
+
+func (s *stopper) stop() {
+	for _, ctrl := range s.ctrls {
+		ctrl.stop()
+	}
+}
+
+func (s *stopper) wait() {
+	for _, ctrl := range s.ctrls {
+		<-ctrl.done
+	}
 }
 
 type controllersKey struct {
@@ -50,15 +73,10 @@ type controllersKey struct {
 }
 
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
+//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions/finalizers,verbs=update
 
-// TODO: This is all rather sloppily copied from espejote.
-// The code/concept as is does not make much sense currently:
-//   - We either find out for nice shutdowns on CRD deletion we need to instantiate a cache per controller and
-//     keep this design but do actually instantiate a cache per controller.
-//   - Or we can partially shutdown the cache and don't need this whole thing. We switch to a single controller with just
-//     dynamic watches and a bit of mapping magic.
-func (r *RevisionManagerManager) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
-	l := log.FromContext(ctx).WithName("RevisionManagerManager.Reconcile")
+func (r *DynamicReconcilerManager) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	l := log.FromContext(ctx).WithName("DynamicReconcilerManager.Reconcile")
 	l.Info("Reconciling Instance")
 
 	var instance apiextv1.CustomResourceDefinition
@@ -115,7 +133,7 @@ func (r *RevisionManagerManager) Reconcile(ctx context.Context, req ctrl.Request
 	return ctrl.Result{}, nil
 }
 
-func (r *RevisionManagerManager) addFinalizer(ctx context.Context, instance *apiextv1.CustomResourceDefinition) error {
+func (r *DynamicReconcilerManager) addFinalizer(ctx context.Context, instance *apiextv1.CustomResourceDefinition) error {
 	if controllerutil.AddFinalizer(instance, revisionControllerFinalizer) {
 		if err := r.Update(ctx, instance); err != nil {
 			return fmt.Errorf("failed to patch finalizer: %w", err)
@@ -124,7 +142,7 @@ func (r *RevisionManagerManager) addFinalizer(ctx context.Context, instance *api
 	return nil
 }
 
-func (r *RevisionManagerManager) removeFinalizer(ctx context.Context, instance *apiextv1.CustomResourceDefinition) error {
+func (r *DynamicReconcilerManager) removeFinalizer(ctx context.Context, instance *apiextv1.CustomResourceDefinition) error {
 	if controllerutil.RemoveFinalizer(instance, revisionControllerFinalizer) {
 		if err := r.Patch(ctx, instance, client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"finalizers":[]}}`))); err != nil {
 			return fmt.Errorf("failed to patch finalizer: %w", err)
@@ -153,7 +171,7 @@ func extractGroupVersionKindFromCRD(crd apiextv1.CustomResourceDefinition) (sche
 	}, nil
 }
 
-func (r *RevisionManagerManager) SetupWithManager(name string, mgr ctrl.Manager) error {
+func (r *DynamicReconcilerManager) SetupWithManager(name string, mgr ctrl.Manager) error {
 	r.manager = mgr
 	return builder.ControllerManagedBy(mgr).
 		For(&apiextv1.CustomResourceDefinition{}).
@@ -161,7 +179,7 @@ func (r *RevisionManagerManager) SetupWithManager(name string, mgr ctrl.Manager)
 		Complete(r)
 }
 
-func (r *RevisionManagerManager) ensureInstanceControllerFor(ctx context.Context, gvk schema.GroupVersionKind) error {
+func (r *DynamicReconcilerManager) ensureInstanceControllerFor(ctx context.Context, gvk schema.GroupVersionKind) error {
 	key := controllersKey{
 		Group: gvk.Group,
 		Kind:  gvk.Kind,
@@ -175,68 +193,59 @@ func (r *RevisionManagerManager) ensureInstanceControllerFor(ctx context.Context
 	}
 
 	l := log.FromContext(ctx).WithName("RevisionManagerManager.ensureInstanceControllerFor").WithValues("gvk", gvk)
-	l.Info("Creating new controller for resource")
+	l.Info("Creating reconcilers for resource")
 
-	instanceCtrlCtx, instanceCtrlCancel := context.WithCancel(r.ControllerLifetimeCtx)
-	reconciler := &RevisionManager{
-		Client:   r.Client,
-		Scheme:   r.Scheme,
-		Recorder: r.Recorder,
+	ctrls := make([]*instanceController, 0, len(r.ManagedReconcilers))
+	for _, newReconciler := range r.ManagedReconcilers {
+		instanceCtrlCtx, instanceCtrlCancel := context.WithCancel(r.ControllerLifetimeCtx)
+		reconciler := newReconciler()
 
-		GVK: gvk,
-	}
-	dynCtrl, err := controller.NewTypedUnmanaged(
-		"instance-controller-"+gvk.Group+"-"+gvk.Version+"-"+gvk.Kind,
-		controller.TypedOptions[reconcile.Request]{
-			// It's fine to re-use the same metric on CRD recreate
-			SkipNameValidation: new(true),
-			Reconciler:         reconciler,
-			Logger:             r.manager.GetLogger(),
-		})
-	if err != nil {
-		instanceCtrlCancel()
-		return fmt.Errorf("failed to create dynamic controller: %w", err)
-	}
-	instanceCtrl := &instanceController{
-		ctrl:       dynCtrl,
-		stop:       instanceCtrlCancel,
-		reconciler: reconciler,
-		done:       make(chan struct{}),
-	}
-
-	target := &unstructured.Unstructured{}
-	target.SetGroupVersionKind(gvk)
-
-	if err := dynCtrl.Watch(source.TypedKind(r.manager.GetCache(), client.Object(target), &handler.TypedEnqueueRequestForObject[client.Object]{})); err != nil {
-		instanceCtrlCancel()
-		return fmt.Errorf("failed to watch target resource: %w", err)
-	}
-	if err := dynCtrl.Watch(source.TypedKind(r.manager.GetCache(), &sourcev1.OCIRepository{}, handler.TypedEnqueueRequestForOwner[*sourcev1.OCIRepository](r.manager.GetScheme(), r.manager.GetRESTMapper(), target))); err != nil {
-		instanceCtrlCancel()
-		return fmt.Errorf("failed to watch OCIRepository resource: %w", err)
-	}
-	if err := dynCtrl.Watch(source.TypedKind(r.manager.GetCache(), &chrysopoeiav1.InstanceRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.InstanceRevision](r.manager.GetScheme(), r.manager.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
-		instanceCtrlCancel()
-		return fmt.Errorf("failed to watch InstanceRevision resource: %w", err)
-	}
-
-	go func() {
-		err := dynCtrl.Start(instanceCtrlCtx)
-		if err == nil {
-			err = ErrStopped
+		dynCtrl, err := controller.NewTypedUnmanaged(
+			"instance-controller-"+gvk.Group+"-"+gvk.Version+"-"+gvk.Kind,
+			controller.TypedOptions[reconcile.Request]{
+				// It's fine to re-use the same metric on CRD recreate
+				SkipNameValidation: new(true),
+				Reconciler:         reconciler,
+				Logger:             r.manager.GetLogger(),
+			})
+		if err != nil {
+			instanceCtrlCancel()
+			return fmt.Errorf("failed to create dynamic controller: %w", err)
 		}
-		instanceCtrl.startErr = err
-		close(instanceCtrl.done)
-	}()
+		instanceCtrl := &instanceController{
+			ctrl: dynCtrl,
+			stop: instanceCtrlCancel,
+			done: make(chan struct{}),
+		}
+
+		target := &unstructured.Unstructured{}
+		target.SetGroupVersionKind(gvk)
+
+		if err := reconciler.SetupDynamicControllerWithWatches(dynCtrl, r.manager, gvk); err != nil {
+			instanceCtrlCancel()
+			return fmt.Errorf("failed to setup dynamic controller with watches: %w", err)
+		}
+
+		go func() {
+			err := dynCtrl.Start(instanceCtrlCtx)
+			if err == nil {
+				err = ErrStopped
+			}
+			instanceCtrl.startErr = err
+			close(instanceCtrl.done)
+		}()
+
+		ctrls = append(ctrls, instanceCtrl)
+	}
 
 	if r.controllers == nil {
-		r.controllers = make(map[controllersKey]*instanceController)
+		r.controllers = make(map[controllersKey]stopper)
 	}
-	r.controllers[key] = instanceCtrl
+	r.controllers[key] = stopper{ctrls: ctrls}
 	return nil
 }
 
-func (r *RevisionManagerManager) stopAndRemoveControllerFor(gvk schema.GroupVersionKind) error {
+func (r *DynamicReconcilerManager) stopAndRemoveControllerFor(gvk schema.GroupVersionKind) error {
 	key := controllersKey{
 		Group: gvk.Group,
 		Kind:  gvk.Kind,
@@ -254,6 +263,7 @@ func (r *RevisionManagerManager) stopAndRemoveControllerFor(gvk schema.GroupVers
 		return nil
 	}
 	rc.stop()
+	rc.wait()
 	delete(r.controllers, key)
 
 	var obj unstructured.Unstructured
@@ -266,9 +276,8 @@ func (r *RevisionManagerManager) stopAndRemoveControllerFor(gvk schema.GroupVers
 }
 
 type instanceController struct {
-	ctrl       controller.TypedController[reconcile.Request]
-	reconciler *RevisionManager
-	stop       func()
+	ctrl controller.TypedController[reconcile.Request]
+	stop func()
 
 	// done is closed when the controller is stopped or fails to start.
 	// Use [StartErr] instead of this field.
