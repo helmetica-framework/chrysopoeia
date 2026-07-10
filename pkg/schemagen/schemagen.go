@@ -88,6 +88,23 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 			Subresources: &apiextv1.CustomResourceSubresources{
 				Status: &apiextv1.CustomResourceSubresourceStatus{},
 			},
+			AdditionalPrinterColumns: []apiextv1.CustomResourceColumnDefinition{
+				{
+					Name:     "Status",
+					Type:     "string",
+					JSONPath: ".status.releaseStatus",
+				},
+				{
+					Name:     "Drift",
+					Type:     "boolean",
+					JSONPath: ".status.driftDetected",
+				},
+				{
+					Name:     "Age",
+					Type:     "date",
+					JSONPath: ".metadata.creationTimestamp",
+				},
+			},
 			Schema: &apiextv1.CustomResourceValidation{
 				OpenAPIV3Schema: &apiextv1.JSONSchemaProps{
 					Type: "object",
@@ -99,6 +116,7 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 								"approval": {
 									Type:        "object",
 									Description: "Approval contains the approval strategy for the service.",
+									Default:     &apiextv1.JSON{Raw: []byte(`{"strategy":"Automatic"}`)},
 									Properties: map[string]apiextv1.JSONSchemaProps{
 										"strategy": {
 											Type:        "string",
@@ -130,6 +148,18 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 								"latestRevision": {
 									Type:        "string",
 									Description: "The name of the revision that currently matches the spec.",
+								},
+								"appliedRevision": {
+									Type:        "string",
+									Description: "The name of the revision that is currently applied to the cluster.",
+								},
+								"releaseStatus": {
+									Type:        "string",
+									Description: "The current status of the service.",
+								},
+								"driftDetected": {
+									Type:        "boolean",
+									Description: "Whether a drift was detected.",
 								},
 							},
 						},

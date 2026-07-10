@@ -11,6 +11,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	imagereflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/spf13/cobra"
@@ -89,6 +90,7 @@ func newScheme() *runtime.Scheme {
 	utilruntime.Must(sourcev1.AddToScheme(scheme))
 	utilruntime.Must(imagereflectorv1.AddToScheme(scheme))
 	utilruntime.Must(apiextv1.AddToScheme(scheme))
+	utilruntime.Must(helmv2.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 	return scheme
 }
@@ -195,6 +197,12 @@ func runController(cmd *cobra.Command, _ []string) error {
 			},
 			ByObject: map[client.Object]cache.ByObject{
 				&apiextv1.CustomResourceDefinition{}: {
+					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
+				},
+				&helmv2.HelmRelease{}: {
+					Namespaces: map[string]cache.Config{
+						cache.AllNamespaces: {},
+					},
 					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
 				},
 			},
