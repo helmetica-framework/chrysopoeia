@@ -102,16 +102,42 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 		return ctrl.Result{}, err
 	}
 
-	release := &helmv2.HelmRelease{}
+	// https://fluxcd.io/flux/components/helm/helmreleases/#recommended-settings
+	release := &helmv2.HelmRelease{
+		Spec: helmv2.HelmReleaseSpec{
+			ChartRef: &helmv2.CrossNamespaceSourceReference{
+				APIVersion: artifact.APIVersion,
+				Kind:       artifact.Kind,
+				Name:       artifact.GetName(),
+			},
+			Values: revision.Spec.Values.DeepCopy(),
+
+			Interval: metav1.Duration{Duration: 30 * time.Minute},
+			DriftDetection: &helmv2.DriftDetection{
+				Mode: helmv2.DriftDetectionWarn,
+			},
+			Install: &helmv2.Install{
+				Strategy: &helmv2.InstallStrategy{
+					Name:          "RetryOnFailure",
+					RetryInterval: &metav1.Duration{Duration: 5 * time.Minute},
+				},
+			},
+			Upgrade: &helmv2.Upgrade{
+				Strategy: &helmv2.UpgradeStrategy{
+					Name:          "RetryOnFailure",
+					RetryInterval: &metav1.Duration{Duration: 5 * time.Minute},
+				},
+			},
+		},
+	}
 	release.SetGroupVersionKind(helmv2.GroupVersion.WithKind("HelmRelease"))
 	release.SetNamespace(helmNSName)
 	release.SetName(instance.GetName())
-	release.Spec.ChartRef = &helmv2.CrossNamespaceSourceReference{
-		APIVersion: artifact.APIVersion,
-		Kind:       artifact.Kind,
-		Name:       artifact.GetName(),
-	}
-	release.Spec.Values = revision.Spec.Values.DeepCopy()
+	release.SetAnnotations(map[string]string{
+		"chrysopoeia.io/instance-uid":  string(instance.GetUID()),
+		"chrysopoeia.io/revision-name": revision.GetName(),
+	})
+
 	hrac, err := runtime.DefaultUnstructuredConverter.ToUnstructured(release)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to convert HelmRelease to unstructured: %w", err)
