@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -22,6 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 )
 
 type ReleaseController struct {
@@ -87,6 +90,8 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	artifact.SetNamespace(helmNSName)
 	artifact.SetName(fmt.Sprintf("artifact-%s", strings.TrimPrefix(digest, "sha256:")))
 	artifact.Spec.URL = revision.Spec.OCIUrl
+	// We pin the artifact to the digest of the approved revision, and set a long interval to avoid unnecessary re-reconciliation.
+	artifact.Spec.Interval = metav1.Duration{Duration: 9 * 24 * time.Hour}
 	artifact.Spec.Reference = &sourcev1.OCIRepositoryRef{
 		Digest: digest,
 	}

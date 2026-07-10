@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -23,6 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 )
 
 type RevisionManager struct {
@@ -180,6 +183,7 @@ func (r *RevisionManager) ensureOCIRepository(ctx context.Context, instance unst
 	ociRepo.SetName(strings.Join([]string{"chrysopoeia", fmt.Sprintf("%x", sha256.Sum256([]byte(ociUrl)))[0:10], version}, "-"))
 	ociRepo.Spec.URL = ociUrl
 	ociRepo.Spec.Reference = &sourcev1.OCIRepositoryRef{Tag: version}
+	ociRepo.Spec.Interval = metav1.Duration{Duration: 24 * time.Hour}
 
 	if err := controllerutil.SetOwnerReference(&instance, &ociRepo, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set owner reference: %w", err)

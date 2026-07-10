@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 
-	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -19,6 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 )
 
 type AutomaticApprovalManager struct {

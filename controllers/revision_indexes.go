@@ -3,9 +3,10 @@ package controllers
 import (
 	"context"
 
-	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 )
 
 const ownerUIDField = "metadata.ownerReferences.uid"
