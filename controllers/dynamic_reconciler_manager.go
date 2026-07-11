@@ -27,6 +27,9 @@ const revisionControllerFinalizer = "chrysopoeia.io/revision-controller-cleanup"
 type DynamicReconciler interface {
 	reconcile.TypedReconciler[reconcile.Request]
 	SetupDynamicControllerWithWatches(dynCtrl controller.TypedController[reconcile.Request], mgr ctrl.Manager, gvk schema.GroupVersionKind) error
+	// ControllerName returns the name of the controller, used for logging and metrics.
+	// Should be the static name, the GVK will be added automatically by the DynamicReconcilerManager.
+	ControllerName() string
 }
 
 // DynamicReconcilerManager reacts to the creation of new CRDs and creates a new controller for each GVK that is registered with it. It also stops the controller when the CRD is deleted.
@@ -200,8 +203,9 @@ func (r *DynamicReconcilerManager) ensureInstanceControllerFor(ctx context.Conte
 		instanceCtrlCtx, instanceCtrlCancel := context.WithCancel(r.ControllerLifetimeCtx)
 		reconciler := newReconciler()
 
+		controllerName := fmt.Sprintf("%s-%s-%s-%s", reconciler.ControllerName(), gvk.Group, gvk.Version, gvk.Kind)
 		dynCtrl, err := controller.NewTypedUnmanaged(
-			"instance-controller-"+gvk.Group+"-"+gvk.Version+"-"+gvk.Kind,
+			controllerName,
 			controller.TypedOptions[reconcile.Request]{
 				// It's fine to re-use the same metric on CRD recreate
 				SkipNameValidation: new(true),

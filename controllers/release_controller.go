@@ -227,6 +227,10 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	return nil
 }
 
+func (r *ReleaseController) ControllerName() string {
+	return "release-controller"
+}
+
 func (r *ReleaseController) SetupDynamicControllerWithWatches(dynCtrl controller.TypedController[reconcile.Request], mgr ctrl.Manager, gvk schema.GroupVersionKind) error {
 	r.Client = mgr.GetClient()
 	r.Scheme = mgr.GetScheme()

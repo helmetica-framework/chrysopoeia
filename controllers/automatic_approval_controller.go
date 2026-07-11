@@ -91,6 +91,10 @@ func (r *AutomaticApprovalManager) Reconcile(ctx context.Context, req reconcile.
 	return ctrl.Result{}, nil
 }
 
+func (r *AutomaticApprovalManager) ControllerName() string {
+	return "automatic-approval-controller"
+}
+
 func (r *AutomaticApprovalManager) SetupDynamicControllerWithWatches(dynCtrl controller.TypedController[reconcile.Request], mgr ctrl.Manager, gvk schema.GroupVersionKind) error {
 	r.Client = mgr.GetClient()
 	r.Scheme = mgr.GetScheme()

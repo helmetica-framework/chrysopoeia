@@ -152,6 +152,10 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 	return ctrl.Result{}, nil
 }
 
+func (r *RevisionManager) ControllerName() string {
+	return "revision-controller"
+}
+
 func (r *RevisionManager) SetupDynamicControllerWithWatches(dynCtrl controller.TypedController[reconcile.Request], mgr ctrl.Manager, gvk schema.GroupVersionKind) error {
 	r.Client = mgr.GetClient()
 	r.Scheme = mgr.GetScheme()
