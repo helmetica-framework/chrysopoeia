@@ -234,7 +234,7 @@ func (r *ReleaseController) ControllerName() string {
 func (r *ReleaseController) SetupDynamicControllerWithWatches(dynCtrl controller.TypedController[reconcile.Request], mgr ctrl.Manager, gvk schema.GroupVersionKind) error {
 	r.Client = mgr.GetClient()
 	r.Scheme = mgr.GetScheme()
-	r.Recorder = mgr.GetEventRecorder(fmt.Sprintf("automatic-approval-controller-%s-%s-%s", gvk.Group, gvk.Version, gvk.Kind))
+	r.Recorder = mgr.GetEventRecorder(fmt.Sprintf("%s-%s-%s-%s", r.ControllerName(), gvk.Group, gvk.Version, gvk.Kind))
 	r.GVK = gvk
 
 	target := &unstructured.Unstructured{}
