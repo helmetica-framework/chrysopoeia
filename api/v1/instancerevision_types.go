@@ -13,6 +13,7 @@ type InstanceRevisionSpec struct {
 	Version string `json:"version"`
 
 	// Values is the values of the Helm chart.
+	// +optional
 	Values apiextensionsv1.JSON `json:"values"`
 
 	// OCIUrl is the OCI repository URL where the service bundle is stored.

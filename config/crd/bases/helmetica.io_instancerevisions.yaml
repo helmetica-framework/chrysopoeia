@@ -73,7 +73,6 @@ spec:
                 type: string
             required:
             - ociUrl
-            - values
             - version
             type: object
           status:

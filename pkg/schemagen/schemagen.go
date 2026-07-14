@@ -200,7 +200,7 @@ func valuesSchema(rawValues []byte) (apiextv1.JSONSchemaProps, error) {
 	}
 
 	if len(node.Content) == 0 {
-		return apiextv1.JSONSchemaProps{}, fmt.Errorf("empty YAML document")
+		return apiextv1.JSONSchemaProps{}, nil
 	}
 	if len(node.Content) > 1 {
 		return apiextv1.JSONSchemaProps{}, fmt.Errorf("multiple YAML documents found")
