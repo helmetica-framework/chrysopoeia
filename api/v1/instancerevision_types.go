@@ -32,6 +32,7 @@ type InstanceRevisionSpec struct {
 type InstanceRevisionStatus struct {
 }
 
+// +genclient
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="Approved",type="date",JSONPath=".spec.approvedAt",description=""

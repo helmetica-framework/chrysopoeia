@@ -76,6 +76,7 @@ type CustomResourceDefinitionSourceStatus struct {
 	AppliedReferenceRevision string `json:"appliedReferenceRevision,omitempty"`
 }
 
+// +genclient
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="SourceRef",type=string,JSONPath=`.spec.reference.name`
