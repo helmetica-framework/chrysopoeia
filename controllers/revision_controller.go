@@ -9,12 +9,14 @@ import (
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
+	chrysopoeiav1ac "github.com/helmetica-framework/chrysopoeia/api/v1/applyconfiguration/api/v1"
 )
 
 type RevisionManager struct {
@@ -107,30 +110,35 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 		return ctrl.Result{}, err
 	}
 
-	var rev chrysopoeiav1.InstanceRevision
-	rev.APIVersion = chrysopoeiav1.GroupVersion.String()
-	rev.Kind = "InstanceRevision"
-	rev.SetNamespace(instance.GetNamespace())
-	rev.SetName(strings.Join([]string{instance.GetName(), fmt.Sprintf("%x", shaSum.Sum(nil))}, "-"))
-	if err := controllerutil.SetControllerReference(&instance, &rev, r.Scheme); err != nil {
-		l.Error(err, "Failed to set controller reference")
-		return ctrl.Result{}, err
-	}
-	rev.Spec.Version = versionWithDigest
-	rev.Spec.OCIUrl = ociUrl
-	rev.Spec.Values.Raw, err = json.Marshal(values)
-	if err != nil {
-		l.Error(err, "Failed to marshal values")
-		return ctrl.Result{}, err
+	revName := strings.Join([]string{instance.GetName(), fmt.Sprintf("%x", shaSum.Sum(nil))}, "-")
+	rev := chrysopoeiav1ac.
+		InstanceRevision(
+			revName,
+			instance.GetNamespace()).
+		WithOwnerReferences(
+			metav1ac.OwnerReference().
+				WithAPIVersion(instance.GetAPIVersion()).
+				WithKind(instance.GetKind()).
+				WithName(instance.GetName()).
+				WithUID(instance.GetUID()).
+				WithController(true)).
+		WithSpec(
+			chrysopoeiav1ac.
+				InstanceRevisionSpec().
+				WithVersion(versionWithDigest).
+				WithOCIUrl(ociUrl),
+		)
+
+	if values != nil {
+		valuesRaw, err := json.Marshal(values)
+		if err != nil {
+			l.Error(err, "Failed to marshal values")
+			return ctrl.Result{}, err
+		}
+		rev.Spec = rev.Spec.WithValues(apiextensionsv1.JSON{Raw: valuesRaw})
 	}
 
-	u, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&rev)
-	if err != nil {
-		l.Error(err, "Failed to convert CRD to unstructured")
-		return ctrl.Result{}, err
-	}
-
-	if err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(&unstructured.Unstructured{Object: u}), client.FieldOwner("chrysopoeia-controller")); err != nil {
+	if err := r.Apply(ctx, rev, client.FieldOwner("chrysopoeia-controller")); err != nil {
 		l.Error(err, "Failed to apply instance revision")
 		return ctrl.Result{}, err
 	}
@@ -139,8 +147,8 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get latestRevision from instance status: %w", err)
 	}
-	if revField != rev.GetName() {
-		if err := unstructured.SetNestedField(instance.Object, rev.GetName(), "status", "latestRevision"); err != nil {
+	if revField != revName {
+		if err := unstructured.SetNestedField(instance.Object, revName, "status", "latestRevision"); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set latestRevision in instance status: %w", err)
 		}
 		if err := r.Status().Update(ctx, &instance); err != nil {

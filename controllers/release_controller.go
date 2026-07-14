@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -112,17 +113,19 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 
 	drifted := apimeta.IsStatusConditionTrue(release.Status.Conditions, helmv2.DriftedCondition)
 
-	if err := unstructured.SetNestedField(instance.Object, status, "status", "releaseStatus"); err != nil {
-		return ctrl.Result{}, err
-	}
-	if err := unstructured.SetNestedField(instance.Object, revision.GetName(), "status", "appliedRevision"); err != nil {
-		return ctrl.Result{}, err
-	}
-	if err := unstructured.SetNestedField(instance.Object, drifted, "status", "driftDetected"); err != nil {
+	statusPatch := &unstructured.Unstructured{}
+	statusPatch.SetGroupVersionKind(instance.GroupVersionKind())
+	statusPatch.SetName(instance.GetName())
+	statusPatch.SetNamespace(instance.GetNamespace())
+	if err := errors.Join(
+		unstructured.SetNestedField(statusPatch.Object, status, "status", "releaseStatus"),
+		unstructured.SetNestedField(statusPatch.Object, revision.GetName(), "status", "appliedRevision"),
+		unstructured.SetNestedField(statusPatch.Object, drifted, "status", "driftDetected"),
+	); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.Status().Update(ctx, &instance); err != nil {
+	if err := r.Status().Apply(ctx, client.ApplyConfigurationFromUnstructured(statusPatch), client.FieldOwner("chrysopoeia:release-controller:status")); err != nil {
 		return ctrl.Result{}, err
 	}
 

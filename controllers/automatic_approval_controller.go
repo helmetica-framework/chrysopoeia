@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
+	chrysopoeiav1ac "github.com/helmetica-framework/chrysopoeia/api/v1/applyconfiguration/api/v1"
 )
 
 type AutomaticApprovalManager struct {
@@ -81,8 +82,13 @@ func (r *AutomaticApprovalManager) Reconcile(ctx context.Context, req reconcile.
 	sortByApprovalNewestFirst(revisions.Items)
 
 	if len(revisions.Items) == 0 || revisions.Items[0].Name != wantedRevisionName || revisions.Items[0].Spec.ApprovedAt == nil {
-		wantedRevision.Spec.ApprovedAt = new(metav1.Now())
-		if err := r.Update(ctx, &wantedRevision); err != nil {
+		approvePatch := chrysopoeiav1ac.
+			InstanceRevision(wantedRevision.Name, wantedRevision.Namespace).
+			WithSpec(
+				chrysopoeiav1ac.
+					InstanceRevisionSpec().
+					WithApprovedAt(metav1.Now()))
+		if err := r.Apply(ctx, approvePatch, client.FieldOwner("chrysopoeia:auto-approval-controller")); err != nil {
 			return ctrl.Result{}, err
 		}
 		l.Info("Approved latest revision", "revision", wantedRevision.Name)
