@@ -183,7 +183,6 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 				Kind:       artifact.Kind,
 				Name:       artifact.GetName(),
 			},
-			Values: revision.Spec.Values.DeepCopy(),
 
 			ServiceAccountName: saName,
 			Interval:           metav1.Duration{Duration: 30 * time.Minute},
@@ -216,6 +215,9 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	release.SetLabels(map[string]string{
 		"chrysopoeia.io/managed": "",
 	})
+	if len(revision.Spec.Values.Raw) > 0 {
+		release.Spec.Values = revision.Spec.Values.DeepCopy()
+	}
 
 	hrac, err := runtime.DefaultUnstructuredConverter.ToUnstructured(release)
 	if err != nil {
