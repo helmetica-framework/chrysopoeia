@@ -133,7 +133,7 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 }
 
 func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstructured.Unstructured, helmNSName string, digest string, revision chrysopoeiav1.InstanceRevision) error {
-	const saName = "helm-deployer"
+	const saName = "instance-admin"
 	ownerOpt := client.FieldOwner(fmt.Sprintf("release-controller:%s:%s:%s:%s", r.GVK.Group, r.GVK.Version, r.GVK.Kind, instance.GetName()))
 
 	if err := r.Apply(ctx, corev1ac.Namespace(helmNSName), ownerOpt); err != nil {
