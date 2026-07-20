@@ -17,7 +17,7 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		fmt.Println("Running port forward to source controller")
-		cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", "chrysopoeia-flux-system", "svc/source-controller", "8080:80")
+		cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", "chrysopoeia-flux-system", "svc/source-controller", "8091:80")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
@@ -32,7 +32,7 @@ func main() {
 	g.Go(func() error {
 		fmt.Println("Running controller")
 		cmd := exec.CommandContext(ctx, "go", "run", "main.go", "controller",
-			"--source-controller-hostname-override=localhost:8080",
+			"--source-controller-hostname-override=localhost:8091",
 			"--image-reflector-controller-hostname=localhost:8090",
 		)
 		cmd.Stdout = os.Stdout
