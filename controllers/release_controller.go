@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,12 +10,14 @@ import (
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	rbacv1ac "k8s.io/client-go/applyconfigurations/rbac/v1"
 	"k8s.io/client-go/tools/events"
@@ -50,12 +53,14 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	l := log.FromContext(ctx).WithName("ReleaseController.Reconcile").WithValues("request", req)
 	l.Info("Reconciling Instance")
 
+	instanceNSName := r.instanceNamespaceName(req.NamespacedName)
+
 	var instance unstructured.Unstructured
 	instance.SetAPIVersion(r.GVK.GroupVersion().String())
 	instance.SetKind(r.GVK.Kind)
 	if err := r.Get(ctx, req.NamespacedName, &instance); err != nil {
 		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, r.cleanupRelease(ctx, instanceNSName)
 		}
 		return ctrl.Result{}, err
 	}
@@ -80,13 +85,12 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 		return ctrl.Result{}, fmt.Errorf("invalid version format: %s", revision.Spec.Version)
 	}
 
-	helmNSName := fmt.Sprintf("x-%s-%s", instance.GetNamespace(), instance.GetName())
-	if err := r.ensureRelease(ctx, instance, helmNSName, digest, revision); err != nil {
+	if err := r.ensureRelease(ctx, instance, instanceNSName, digest, revision); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	var release helmv2.HelmRelease
-	if err := r.Get(ctx, client.ObjectKey{Namespace: helmNSName, Name: instance.GetName()}, &release); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: instanceNSName, Name: instance.GetName()}, &release); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -130,6 +134,21 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ReleaseController) instanceNamespaceName(nsn types.NamespacedName) string {
+	gvkh := sha256.New()
+	_, _ = fmt.Fprint(gvkh, r.GVK.Group, r.GVK.Version, r.GVK.Kind)
+	return fmt.Sprintf("x-%x-%s-%s", gvkh.Sum(nil)[:4], nsn.Namespace, nsn.Name)
+}
+
+func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName string) error {
+	log.FromContext(ctx).WithName("cleanupRelease").Info("Cleaning up release", "namespace", helmNSName)
+
+	if err := r.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: helmNSName}}); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstructured.Unstructured, helmNSName string, digest string, revision chrysopoeiav1.InstanceRevision) error {
