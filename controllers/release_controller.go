@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -162,15 +163,37 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	const saName = "instance-admin"
 	ownerOpt := client.FieldOwner(fmt.Sprintf("release-controller:%s:%s:%s:%s", r.GVK.Group, r.GVK.Version, r.GVK.Kind, instance.GetName()))
 
-	if err := r.Apply(ctx, corev1ac.Namespace(helmNSName), ownerOpt); err != nil {
+	commonAnnotations := map[string]string{
+		"chrysopoeia.io/claim-apiVersion": instance.GetAPIVersion(),
+		"chrysopoeia.io/claim-kind":       instance.GetKind(),
+		"chrysopoeia.io/claim-namespace":  instance.GetNamespace(),
+		"chrysopoeia.io/claim-name":       instance.GetName(),
+		"chrysopoeia.io/claim-uid":        string(instance.GetUID()),
+		"chrysopoeia.io/revision-name":    revision.GetName(),
+	}
+	commonLabels := map[string]string{
+		"chrysopoeia.io/instance": "",
+	}
+
+	if err := r.Apply(ctx,
+		corev1ac.Namespace(helmNSName).
+			WithAnnotations(commonAnnotations).
+			WithLabels(commonLabels),
+		ownerOpt); err != nil {
 		return err
 	}
 
-	if err := r.Apply(ctx, corev1ac.ServiceAccount(saName, helmNSName), ownerOpt); err != nil {
+	if err := r.Apply(ctx,
+		corev1ac.ServiceAccount(saName, helmNSName).
+			WithAnnotations(commonAnnotations).
+			WithLabels(commonLabels),
+		ownerOpt); err != nil {
 		return err
 	}
 
 	adminRole := rbacv1ac.RoleBinding(fmt.Sprintf("%s-admin", saName), helmNSName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
 		WithRoleRef(
 			rbacv1ac.RoleRef().
 				WithAPIGroup("rbac.authorization.k8s.io").
@@ -190,6 +213,8 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	artifact.SetGroupVersionKind(sourcev1.GroupVersion.WithKind("OCIRepository"))
 	artifact.SetNamespace(helmNSName)
 	artifact.SetName(fmt.Sprintf("artifact-%s", strings.TrimPrefix(digest, "sha256:")))
+	artifact.SetAnnotations(commonAnnotations)
+	artifact.SetLabels(commonLabels)
 	artifact.Spec.URL = revision.Spec.OCIUrl
 	// We pin the artifact to the digest of the approved revision, and set a long interval to avoid unnecessary re-reconciliation.
 	artifact.Spec.Interval = metav1.Duration{Duration: 9 * 24 * time.Hour}
@@ -235,15 +260,10 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	release.SetGroupVersionKind(helmv2.GroupVersion.WithKind("HelmRelease"))
 	release.SetNamespace(helmNSName)
 	release.SetName(instance.GetName())
-	release.SetAnnotations(map[string]string{
-		"chrysopoeia.io/claim-uid":       string(instance.GetUID()),
-		"chrysopoeia.io/claim-name":      instance.GetName(),
-		"chrysopoeia.io/claim-namespace": instance.GetNamespace(),
-		"chrysopoeia.io/revision-name":   revision.GetName(),
-	})
-	release.SetLabels(map[string]string{
-		"chrysopoeia.io/managed": "",
-	})
+	release.SetAnnotations(commonAnnotations)
+	helmLabels := map[string]string{"chrysopoeia.io/managed": ""}
+	maps.Copy(helmLabels, commonLabels)
+	release.SetLabels(helmLabels)
 	if len(revision.Spec.Values.Raw) > 0 {
 		release.Spec.Values = revision.Spec.Values.DeepCopy()
 	}
