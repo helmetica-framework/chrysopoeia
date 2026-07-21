@@ -125,6 +125,7 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 		unstructured.SetNestedField(statusPatch.Object, status, "status", "releaseStatus"),
 		unstructured.SetNestedField(statusPatch.Object, revision.GetName(), "status", "appliedRevision"),
 		unstructured.SetNestedField(statusPatch.Object, drifted, "status", "driftDetected"),
+		unstructured.SetNestedField(statusPatch.Object, instanceNSName, "status", "instanceNamespace"),
 	); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -229,10 +230,10 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	release.SetNamespace(helmNSName)
 	release.SetName(instance.GetName())
 	release.SetAnnotations(map[string]string{
-		"chrysopoeia.io/instance-uid":       string(instance.GetUID()),
-		"chrysopoeia.io/instance-name":      instance.GetName(),
-		"chrysopoeia.io/instance-namespace": instance.GetNamespace(),
-		"chrysopoeia.io/revision-name":      revision.GetName(),
+		"chrysopoeia.io/claim-uid":       string(instance.GetUID()),
+		"chrysopoeia.io/claim-name":      instance.GetName(),
+		"chrysopoeia.io/claim-namespace": instance.GetNamespace(),
+		"chrysopoeia.io/revision-name":   revision.GetName(),
 	})
 	release.SetLabels(map[string]string{
 		"chrysopoeia.io/managed": "",
@@ -272,8 +273,8 @@ func (r *ReleaseController) SetupDynamicControllerWithWatches(dynCtrl controller
 	}
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &helmv2.HelmRelease{}, handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, hr *helmv2.HelmRelease) []reconcile.Request {
 		a := hr.GetAnnotations()
-		instanceName := a["chrysopoeia.io/instance-name"]
-		instanceNamespace := a["chrysopoeia.io/instance-namespace"]
+		instanceName := a["chrysopoeia.io/claim-name"]
+		instanceNamespace := a["chrysopoeia.io/claim-namespace"]
 		if instanceName != "" && instanceNamespace != "" {
 			return []reconcile.Request{
 				{NamespacedName: client.ObjectKey{Namespace: instanceNamespace, Name: instanceName}},

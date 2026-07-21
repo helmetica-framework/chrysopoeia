@@ -11,17 +11,38 @@ spec:
     singular: juiceshop
   scope: Namespaced
   versions:
-  - name: bundle
+  - additionalPrinterColumns:
+    - jsonPath: .status.releaseStatus
+      name: Status
+      type: string
+    - jsonPath: .status.driftDetected
+      name: Drift
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: bundle
     schema:
       openAPIV3Schema:
         properties:
           spec:
             description: Configures the desired state of the service.
             properties:
-              desiredRevision:
-                description: The desired revision of the service.
-                type: string
-              ociRepository:
+              approval:
+                default:
+                  strategy: Automatic
+                description: Approval contains the approval strategy for the service.
+                properties:
+                  strategy:
+                    default: Automatic
+                    description: The approval strategy for the service. Can be either
+                      'Automatic' or 'Manual'.
+                    enum:
+                    - Automatic
+                    - Manual
+                    type: string
+                type: object
+              ociUrl:
                 description: The OCI repository where the service bundle is stored.
                 type: string
               values:
@@ -261,9 +282,31 @@ spec:
                   the service.
                 type: string
             type: object
+          status:
+            description: Status contains the observed state of the service.
+            properties:
+              appliedRevision:
+                description: The name of the revision that is currently applied to
+                  the cluster.
+                type: string
+              driftDetected:
+                description: Whether a drift was detected.
+                type: boolean
+              instanceNamespace:
+                description: The namespace where the service is deployed in.
+                type: string
+              latestRevision:
+                description: The name of the revision that currently matches the spec.
+                type: string
+              releaseStatus:
+                description: The current status of the service.
+                type: string
+            type: object
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 status:
   acceptedNames:
     kind: ""

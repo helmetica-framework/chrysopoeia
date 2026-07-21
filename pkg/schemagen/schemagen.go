@@ -161,6 +161,10 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 									Type:        "boolean",
 									Description: "Whether a drift was detected.",
 								},
+								"instanceNamespace": {
+									Type:        "string",
+									Description: "The namespace where the service is deployed in.",
+								},
 							},
 						},
 					},
