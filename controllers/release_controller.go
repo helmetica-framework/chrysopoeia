@@ -140,7 +140,13 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 func (r *ReleaseController) instanceNamespaceName(nsn types.NamespacedName) string {
 	gvkh := sha256.New()
 	_, _ = fmt.Fprint(gvkh, r.GVK.Group, r.GVK.Version, r.GVK.Kind)
-	return fmt.Sprintf("x-%x-%s-%s", gvkh.Sum(nil)[:4], nsn.Namespace, nsn.Name)
+	name := fmt.Sprintf("x-%x-%s-%s", gvkh.Sum(nil)[:4], nsn.Namespace, nsn.Name)
+	if len(name) <= 63 {
+		return name
+	}
+	prefix := name[:63-9]
+	hash := sha256.Sum256([]byte(name))
+	return fmt.Sprintf("%s-%x", prefix, hash[:4])
 }
 
 func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName string) error {
