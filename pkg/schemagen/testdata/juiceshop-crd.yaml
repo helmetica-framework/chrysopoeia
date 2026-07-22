@@ -5,6 +5,10 @@ metadata:
 spec:
   group: v3.juiceshop.bundles.appcat.io
   names:
+    categories:
+    - all
+    - claim
+    - helmetica
     kind: JuiceShop
     listKind: JuiceShopList
     plural: juiceshops
@@ -45,6 +49,28 @@ spec:
               ociUrl:
                 description: The OCI repository where the service bundle is stored.
                 type: string
+              provides:
+                description: The list of dependencies that this service provides.
+                items:
+                  properties:
+                    name:
+                      description: The name of the dependency that this service provides.
+                        Should be the fully qualified crd name as written in the .metadata.name
+                        field of the CRD.
+                      type: string
+                  type: object
+                type: array
+              requires:
+                description: The list of dependencies that this service requires.
+                items:
+                  properties:
+                    name:
+                      description: The name of the dependency that this service requires.
+                        Should be the fully qualified crd name as written in the .metadata.name
+                        field of the CRD.
+                      type: string
+                  type: object
+                type: array
               values:
                 description: This field together with the `.spec.version` field defines
                   the configuration of the service. Every change to either of these

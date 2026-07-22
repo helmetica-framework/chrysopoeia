@@ -19,6 +19,8 @@ const CRDListKindAnnotation = "crd.bundle.appcat.io/listKind"
 const CRDSingularAnnotation = "crd.bundle.appcat.io/singular"
 const CRDPluralAnnotation = "crd.bundle.appcat.io/plural"
 
+var crdCategories = []string{"all", "claim", "helmetica"}
+
 // GenerateCRD generates a [apiextv1.CustomResourceDefinition] from a Helm chart.
 // The CRD is generated based on the chart's values.yaml file and annotations.
 //
@@ -67,6 +69,7 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 		}
 		crd.Spec.Names = names
 	}
+	crd.Spec.Names.Categories = append(crd.Spec.Names.Categories, crdCategories...)
 
 	crd.Spec.Group = o.group
 	if crd.Spec.Group == "" {
@@ -138,6 +141,36 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 								"ociUrl": {
 									Type:        "string",
 									Description: "The OCI repository where the service bundle is stored.",
+								},
+								"provides": {
+									Type:        "array",
+									Description: "The list of dependencies that this service provides.",
+									Items: &apiextv1.JSONSchemaPropsOrArray{
+										Schema: &apiextv1.JSONSchemaProps{
+											Type: "object",
+											Properties: map[string]apiextv1.JSONSchemaProps{
+												"name": {
+													Type:        "string",
+													Description: "The name of the dependency that this service provides. Should be the fully qualified crd name as written in the .metadata.name field of the CRD.",
+												},
+											},
+										},
+									},
+								},
+								"requires": {
+									Type:        "array",
+									Description: "The list of dependencies that this service requires.",
+									Items: &apiextv1.JSONSchemaPropsOrArray{
+										Schema: &apiextv1.JSONSchemaProps{
+											Type: "object",
+											Properties: map[string]apiextv1.JSONSchemaProps{
+												"name": {
+													Type:        "string",
+													Description: "The name of the dependency that this service requires. Should be the fully qualified crd name as written in the .metadata.name field of the CRD.",
+												},
+											},
+										},
+									},
 								},
 							},
 						},
