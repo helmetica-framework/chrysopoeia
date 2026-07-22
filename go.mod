@@ -11,7 +11,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/multierr v1.11.0
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
-	golang.org/x/sync v0.21.0
+	golang.org/x/sync v0.22.0
 	helm.sh/helm/v4 v4.2.2
 	k8s.io/api v0.36.2
 	k8s.io/apiextensions-apiserver v0.36.2
