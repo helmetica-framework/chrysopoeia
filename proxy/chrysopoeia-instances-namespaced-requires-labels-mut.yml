@@ -1,0 +1,51 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "chrysopoeia-instances-namespaced-requires-labels"
+  annotations:
+    description: |
+      This policy ensures that all resources created in namespaces with the label "chrysopoeia.io/instance"
+      have the dependency labels starting with "requires.helmetica.io/".
+      It copies the labels from the namespace to the resource being created.
+
+      This allows the chrysopoeia proxy to filter access for operators that require cluster scoped access.
+spec:
+  matchConstraints:
+    resourceRules:
+    - apiGroups:   ["*"]
+      apiVersions: ["*"]
+      operations:  ["CREATE"]
+      resources:   ["*"]
+    namespaceSelector:
+      matchExpressions:
+      - key: "chrysopoeia.io/instance"
+        operator: "Exists"
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  mutations:
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: >
+          ('labels' in object.metadata ? [] : [
+            JSONPatch{
+              op: "add",
+              path: "/metadata/labels",
+              value: {}
+            },
+          ])
+          +
+          namespaceObject.?metadata.?labels.orValue({}).map(k,
+            k.startsWith('requires.helmetica.io/') && !(k in object.metadata.?labels.orValue({})),
+            JSONPatch{
+              op: "add",
+              path: "/metadata/labels/" + jsonpatch.escapeKey(k),
+              value: ""
+            }
+          )
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: "chrysopoeia-instances-namespaced-requires-labels"
+spec:
+  policyName: "chrysopoeia-instances-namespaced-requires-labels"
