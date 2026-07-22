@@ -16,6 +16,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .status.instanceNamespace
+      name: Instance Namespace
+      type: string
     - jsonPath: .status.releaseStatus
       name: Status
       type: string

@@ -93,6 +93,11 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 			},
 			AdditionalPrinterColumns: []apiextv1.CustomResourceColumnDefinition{
 				{
+					Name:     "Instance Namespace",
+					Type:     "string",
+					JSONPath: ".status.instanceNamespace",
+				},
+				{
 					Name:     "Status",
 					Type:     "string",
 					JSONPath: ".status.releaseStatus",
