@@ -1,0 +1,43 @@
+apiVersion: v26.mariadb-crds.helmetica-bundles.io/bundle
+kind: MariaDBOperatorCRD
+metadata:
+  name: crds
+  namespace: default
+spec:
+  approval:
+    strategy: Automatic
+  version: 26.6.0
+---
+apiVersion: v26.mariadb-operator.helmetica-bundles.io/bundle
+kind: MariaDBOperator
+metadata:
+  name: operator
+  namespace: default
+spec:
+  approval:
+    strategy: Automatic
+  version: 26.6.0
+  values:
+    rbac:
+      enabled: false
+    webhook:
+      enabled: false
+    certController:
+      enabled: false
+---
+apiVersion: v26.mariadb-cluster.helmetica-bundles.io/bundle
+kind: MariaDBCluster
+metadata:
+  name: cluster1
+  namespace: default
+spec:
+  approval:
+    strategy: Automatic
+  version: 26.6.0
+  values:
+    mariadb:
+      storage:
+        size: 1Gi
+      replicas: 1
+      galera:
+        enabled: false

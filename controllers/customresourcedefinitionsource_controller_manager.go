@@ -262,6 +262,24 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 				ociRepoProp.Default = &apiextv1.JSON{Raw: urlJSON}
 				spec.Properties["ociUrl"] = ociRepoProp
 			}
+			if requiresProp, ok := spec.Properties["requires"]; ok && len(source.Spec.Requires) > 0 {
+				requiresJSON, err := json.Marshal(source.Spec.Requires)
+				if err != nil {
+					l.Error(err, "Failed to marshal source requires to JSON", "SourceRequires", source.Spec.Requires)
+					return ctrl.Result{}, err
+				}
+				requiresProp.Default = &apiextv1.JSON{Raw: requiresJSON}
+				spec.Properties["requires"] = requiresProp
+			}
+			if providesProp, ok := spec.Properties["provides"]; ok && len(source.Spec.Provides) > 0 {
+				providesJSON, err := json.Marshal(source.Spec.Provides)
+				if err != nil {
+					l.Error(err, "Failed to marshal source provides to JSON", "SourceProvides", source.Spec.Provides)
+					return ctrl.Result{}, err
+				}
+				providesProp.Default = &apiextv1.JSON{Raw: providesJSON}
+				spec.Properties["provides"] = providesProp
+			}
 			if versionProp, ok := spec.Properties["version"]; ok {
 				versionProp.Enum = make([]apiextv1.JSON, len(tags))
 				for i, tag := range tags {
@@ -310,6 +328,11 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 	crd.Annotations["chrysopoeia.io/artifact-ref-generation"] = strconv.Itoa(int(ociRepo.Status.ObservedGeneration))
 	crd.Annotations["chrysopoeia.io/artifact-ref-lastUpdateTime"] = ociRepo.Status.Artifact.LastUpdateTime.Format(time.RFC3339)
 	crd.Annotations["chrysopoeia.io/artifact-ref-revision"] = ociRepo.Status.Artifact.Revision
+
+	crd.Annotations["chrysopoeia.io/source-ref-apiVersion"] = source.APIVersion
+	crd.Annotations["chrysopoeia.io/source-ref-kind"] = source.Kind
+	crd.Annotations["chrysopoeia.io/source-ref-name"] = source.Name
+	crd.Annotations["chrysopoeia.io/source-ref-namespace"] = source.Namespace
 
 	origCRD := apiextv1.CustomResourceDefinition{}
 	if err := r.Get(ctx, client.ObjectKey{Name: crd.Name}, &origCRD); err != nil {

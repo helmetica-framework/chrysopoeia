@@ -1,0 +1,151 @@
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+metadata:
+  name: v26.mariadb-crds
+spec:
+  crdNames:
+    kind: MariaDBOperatorCRD
+    plural: mariadboperatorcrds
+  provides:
+  - name: backups.k8s.mariadb.com
+  - name: connections.k8s.mariadb.com
+  - name: databases.k8s.mariadb.com
+  - name: externalmariadbs.k8s.mariadb.com
+  - name: grants.k8s.mariadb.com
+  - name: mariadbs.k8s.mariadb.com
+  - name: maxscales.k8s.mariadb.com
+  - name: physicalbackups.k8s.mariadb.com
+  - name: pointintimerecoveries.k8s.mariadb.com
+  - name: restores.k8s.mariadb.com
+  - name: sqljobs.k8s.mariadb.com
+  - name: users.k8s.mariadb.com
+  reference:
+    apiVersion: source.toolkit.fluxcd.io/v1
+    kind: OCIRepository
+    name: mariadb-crds-v26
+  versionDiscovery:
+    reference:
+      apiVersion: image.toolkit.fluxcd.io/v1
+      kind: ImageRepository
+      name: mariadb-crds-v26
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: mariadb-crds-v26
+spec:
+  exclusionList:
+  - ^.*\.sig$
+  - ^sha256-.+$
+  image: ghcr.io/mariadb-operator/charts/mariadb-operator-crds
+  interval: 12h
+  provider: generic
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: mariadb-crds-v26
+spec:
+  interval: 12h
+  provider: generic
+  ref:
+    semver: 26.x
+  timeout: 60s
+  url: oci://ghcr.io/mariadb-operator/charts/mariadb-operator-crds
+---
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+metadata:
+  name: v26.mariadb-operator
+spec:
+  crdNames:
+    kind: MariaDBOperator
+    plural: mariadboperators
+  reference:
+    apiVersion: source.toolkit.fluxcd.io/v1
+    kind: OCIRepository
+    name: mariadb-operator-v26
+  versionDiscovery:
+    reference:
+      apiVersion: image.toolkit.fluxcd.io/v1
+      kind: ImageRepository
+      name: mariadb-operator-v26
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: mariadb-operator-v26
+spec:
+  exclusionList:
+  - ^.*\.sig$
+  - ^sha256-.+$
+  image: ghcr.io/mariadb-operator/charts/mariadb-operator
+  interval: 12h
+  provider: generic
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: mariadb-operator-v26
+spec:
+  interval: 12h
+  provider: generic
+  ref:
+    semver: 26.x
+  timeout: 60s
+  url: oci://ghcr.io/mariadb-operator/charts/mariadb-operator
+---
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+metadata:
+  name: v26.mariadb-cluster
+spec:
+  crdNames:
+    kind: MariaDBCluster
+    plural: mariadbclusters
+  reference:
+    apiVersion: source.toolkit.fluxcd.io/v1
+    kind: OCIRepository
+    name: mariadb-cluster-v26
+  versionDiscovery:
+    reference:
+      apiVersion: image.toolkit.fluxcd.io/v1
+      kind: ImageRepository
+      name: mariadb-cluster-v26
+  requires:
+  - name: backups.k8s.mariadb.com
+  - name: connections.k8s.mariadb.com
+  - name: databases.k8s.mariadb.com
+  - name: externalmariadbs.k8s.mariadb.com
+  - name: grants.k8s.mariadb.com
+  - name: mariadbs.k8s.mariadb.com
+  - name: maxscales.k8s.mariadb.com
+  - name: physicalbackups.k8s.mariadb.com
+  - name: pointintimerecoveries.k8s.mariadb.com
+  - name: restores.k8s.mariadb.com
+  - name: sqljobs.k8s.mariadb.com
+  - name: users.k8s.mariadb.com
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: mariadb-cluster-v26
+spec:
+  exclusionList:
+  - ^.*\.sig$
+  - ^sha256-.+$
+  image: ghcr.io/mariadb-operator/charts/mariadb-cluster
+  interval: 12h
+  provider: generic
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: mariadb-cluster-v26
+spec:
+  interval: 12h
+  provider: generic
+  ref:
+    semver: 26.x
+  timeout: 60s
+  url: oci://ghcr.io/mariadb-operator/charts/mariadb-cluster

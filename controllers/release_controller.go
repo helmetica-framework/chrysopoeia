@@ -175,6 +175,51 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		"chrysopoeia.io/instance": "",
 	}
 
+	requires := extractRequires(instance)
+	for _, r := range requires {
+		commonLabels[fmt.Sprintf("requires.helmetica.io/%s", r)] = ""
+	}
+
+	provides := extractProvides(instance)
+	isProvider := len(provides) > 0
+	for _, p := range provides {
+		commonLabels[fmt.Sprintf("provides.helmetica.io/%s", p)] = ""
+	}
+
+	providerRoleName := strings.Join([]string{"chrysopoeia", "provider", helmNSName}, ":")
+	cr := rbacv1ac.
+		ClusterRole(providerRoleName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
+		WithRules(
+			rbacv1ac.PolicyRule().
+				WithAPIGroups("apiextensions.k8s.io").
+				WithResources("customresourcedefinitions").
+				WithResourceNames(provides...).
+				WithVerbs("*"),
+		)
+	if err := r.Apply(ctx, cr, ownerOpt); err != nil {
+		return err
+	}
+	crb := rbacv1ac.
+		ClusterRoleBinding(providerRoleName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
+		WithRoleRef(
+			rbacv1ac.RoleRef().
+				WithAPIGroup("rbac.authorization.k8s.io").
+				WithKind("ClusterRole").
+				WithName(providerRoleName),
+		).WithSubjects(
+		rbacv1ac.Subject().
+			WithKind("ServiceAccount").
+			WithName(saName).
+			WithNamespace(helmNSName),
+	)
+	if err := r.Apply(ctx, crb, ownerOpt); err != nil {
+		return err
+	}
+
 	if err := r.Apply(ctx,
 		corev1ac.Namespace(helmNSName).
 			WithAnnotations(commonAnnotations).
@@ -191,7 +236,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 
-	adminRole := rbacv1ac.RoleBinding(fmt.Sprintf("%s-admin", saName), helmNSName).
+	adminRoleBinding := rbacv1ac.RoleBinding(fmt.Sprintf("%s-admin", saName), helmNSName).
 		WithAnnotations(commonAnnotations).
 		WithLabels(commonLabels).
 		WithRoleRef(
@@ -205,7 +250,46 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 			WithName(saName).
 			WithNamespace(helmNSName),
 	)
-	if err := r.Apply(ctx, adminRole, ownerOpt); err != nil {
+	if err := r.Apply(ctx, adminRoleBinding, ownerOpt); err != nil {
+		return err
+	}
+
+	rbacRequires := make([]*rbacv1ac.PolicyRuleApplyConfiguration, 0, len(requires))
+	for _, r := range requires {
+		resource, group, found := strings.Cut(r, ".")
+		if !found {
+			return fmt.Errorf("invalid requires format: %s", r)
+		}
+		rbacRequires = append(rbacRequires, rbacv1ac.PolicyRule().
+			WithAPIGroups(group).
+			WithResources(resource).
+			WithVerbs("*"),
+		)
+	}
+	requiresRoleName := strings.Join([]string{"chrysopoeia", "requires"}, ":")
+	requiresRole := rbacv1ac.
+		Role("chrysopoeia:requires", helmNSName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
+		WithRules(rbacRequires...)
+	if err := r.Apply(ctx, requiresRole, ownerOpt); err != nil {
+		return err
+	}
+	requiresRoleBinding := rbacv1ac.RoleBinding("chrysopoeia:requires-instance-admin", helmNSName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
+		WithRoleRef(
+			rbacv1ac.RoleRef().
+				WithAPIGroup("rbac.authorization.k8s.io").
+				WithKind("Role").
+				WithName(requiresRoleName),
+		).WithSubjects(
+		rbacv1ac.Subject().
+			WithKind("ServiceAccount").
+			WithName(saName).
+			WithNamespace(helmNSName),
+	)
+	if err := r.Apply(ctx, requiresRoleBinding, ownerOpt); err != nil {
 		return err
 	}
 
@@ -229,6 +313,10 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 
+	crdStrategy := helmv2.Skip
+	if isProvider {
+		crdStrategy = helmv2.CreateReplace
+	}
 	// https://fluxcd.io/flux/components/helm/helmreleases/#recommended-settings
 	release := &helmv2.HelmRelease{
 		Spec: helmv2.HelmReleaseSpec{
@@ -236,6 +324,10 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 				APIVersion: artifact.APIVersion,
 				Kind:       artifact.Kind,
 				Name:       artifact.GetName(),
+			},
+			CommonMetadata: &helmv2.CommonMetadata{
+				Labels:      commonLabels,
+				Annotations: commonAnnotations,
 			},
 
 			ServiceAccountName: saName,
@@ -248,12 +340,14 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 					Name:          "RetryOnFailure",
 					RetryInterval: &metav1.Duration{Duration: 5 * time.Minute},
 				},
+				CRDs: crdStrategy,
 			},
 			Upgrade: &helmv2.Upgrade{
 				Strategy: &helmv2.UpgradeStrategy{
 					Name:          "RetryOnFailure",
 					RetryInterval: &metav1.Duration{Duration: 5 * time.Minute},
 				},
+				CRDs: crdStrategy,
 			},
 		},
 	}
@@ -312,4 +406,29 @@ func (r *ReleaseController) SetupDynamicControllerWithWatches(dynCtrl controller
 	}
 
 	return nil
+}
+
+func extractRequires(revision unstructured.Unstructured) []string {
+	return extractDependencies(revision, "requires")
+}
+
+func extractProvides(revision unstructured.Unstructured) []string {
+	return extractDependencies(revision, "provides")
+}
+
+func extractDependencies(revision unstructured.Unstructured, key string) []string {
+	requires, found, err := unstructured.NestedSlice(revision.Object, "spec", key)
+	if err != nil || !found {
+		return nil
+	}
+	strs := make([]string, 0, len(requires))
+	for _, r := range requires {
+		if m, ok := r.(map[string]any); ok {
+			if name, ok := m["name"].(string); ok {
+				strs = append(strs, name)
+			}
+		}
+	}
+
+	return strs
 }

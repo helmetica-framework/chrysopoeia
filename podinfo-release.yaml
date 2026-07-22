@@ -1,0 +1,32 @@
+apiVersion: v6.podinfo.helmetica-bundles.io/bundle
+kind: PodInfo
+metadata:
+  name: test
+  namespace: default
+spec:
+  version: 6.14.0
+  values:
+    replicaCount: 1
+---
+apiVersion: v6.podinfo.helmetica-bundles.io/bundle
+kind: PodInfo
+metadata:
+  name: prod
+  namespace: default
+spec:
+  version: 6.14.0
+  values:
+    replicaCount: 2
+---
+apiVersion: v6.podinfo.helmetica-bundles.io/bundle
+kind: PodInfo
+metadata:
+  name: error
+  namespace: default
+spec:
+  approval:
+    strategy: Automatic
+  version: 6.13.0
+  values:
+    service:
+      type: ErrorNotExisting

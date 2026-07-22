@@ -20,6 +20,10 @@ type CustomResourceDefinitionSourceSpecApplyConfiguration struct {
 	CRDNames *apiextensionsv1.CustomResourceDefinitionNames `json:"crdNames,omitempty"`
 	// VersionDiscovery defines how to discover the version of the source.
 	VersionDiscovery *VersionDiscoveryApplyConfiguration `json:"versionDiscovery,omitempty"`
+	// Provides is a list of dependencies that this CRD provides.
+	Provides []DependencyApplyConfiguration `json:"provides,omitempty"`
+	// Requires is a list of dependencies that this CRD requires.
+	Requires []DependencyApplyConfiguration `json:"requires,omitempty"`
 }
 
 // CustomResourceDefinitionSourceSpecApplyConfiguration constructs a declarative configuration of the CustomResourceDefinitionSourceSpec type for use with
@@ -49,5 +53,31 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithCRDNames(valu
 // If called multiple times, the VersionDiscovery field is set to the value of the last call.
 func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithVersionDiscovery(value *VersionDiscoveryApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
 	b.VersionDiscovery = value
+	return b
+}
+
+// WithProvides adds the given value to the Provides field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Provides field.
+func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithProvides(values ...*DependencyApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithProvides")
+		}
+		b.Provides = append(b.Provides, *values[i])
+	}
+	return b
+}
+
+// WithRequires adds the given value to the Requires field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Requires field.
+func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithRequires(values ...*DependencyApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithRequires")
+		}
+		b.Requires = append(b.Requires, *values[i])
+	}
 	return b
 }

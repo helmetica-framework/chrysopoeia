@@ -20,6 +20,22 @@ type CustomResourceDefinitionSourceSpec struct {
 	// VersionDiscovery defines how to discover the version of the source.
 	// +optional
 	VersionDiscovery VersionDiscovery `json:"versionDiscovery,omitempty"`
+
+	// Provides is a list of dependencies that this CRD provides.
+	// +optional
+	Provides []Dependency `json:"provides,omitempty"`
+
+	// Requires is a list of dependencies that this CRD requires.
+	// +optional
+	Requires []Dependency `json:"requires,omitempty"`
+}
+
+type Dependency struct {
+	// Name of the dependency.
+	// Should be the fully qualified crd name as written in the .metadata.name field of the CRD.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
 }
 
 type SourceReference struct {

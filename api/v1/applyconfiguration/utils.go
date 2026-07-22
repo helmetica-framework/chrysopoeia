@@ -22,6 +22,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1.CustomResourceDefinitionSourceSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSourceStatus"):
 		return &apiv1.CustomResourceDefinitionSourceStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("Dependency"):
+		return &apiv1.DependencyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DiscoveryReference"):
 		return &apiv1.DiscoveryReferenceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("InstanceRevision"):

@@ -103,6 +103,20 @@ spec:
                 - kind
                 - plural
                 type: object
+              provides:
+                description: Provides is a list of dependencies that this CRD provides.
+                items:
+                  properties:
+                    name:
+                      description: |-
+                        Name of the dependency.
+                        Should be the fully qualified crd name as written in the .metadata.name field of the CRD.
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               reference:
                 description: Reference is a reference to the source of the bundle.
                 properties:
@@ -124,6 +138,20 @@ spec:
                 - kind
                 - name
                 type: object
+              requires:
+                description: Requires is a list of dependencies that this CRD requires.
+                items:
+                  properties:
+                    name:
+                      description: |-
+                        Name of the dependency.
+                        Should be the fully qualified crd name as written in the .metadata.name field of the CRD.
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               versionDiscovery:
                 description: VersionDiscovery defines how to discover the version
                   of the source.
