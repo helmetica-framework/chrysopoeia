@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,7 +15,10 @@ import (
 	"slices"
 	"strings"
 
+	proxyrequest "github.com/helmetica-framework/chrysopoeia/proxy/request"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -22,11 +26,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server"
+	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const labelSelector = "requires.helmetica.io/mariadbs.k8s.mariadb.com"
+const internalErrorHeader = "X-Chrysopoeia-Proxy-Error"
 
 func main() {
 	flag.Parse()
@@ -38,6 +45,15 @@ func main() {
 	protoEncoder := protobuf.NewSerializer(scheme, scheme)
 
 	upstreamRestConf := ctrl.GetConfigOrDie()
+
+	if !impersonationEmpty(upstreamRestConf) {
+		log.Fatal("Impersonation is not supported for the upstream config")
+	}
+
+	upstreamAuthenticationClient, err := authenticationv1client.NewForConfig(upstreamRestConf)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	upstreamTransportConf, err := upstreamRestConf.TransportConfig()
 	if err != nil {
@@ -53,8 +69,9 @@ func main() {
 		log.Fatal(err)
 	}
 	frontendProxy := httptest.NewTLSServer(&httputil.ReverseProxy{
-		Transport: upstreamTransport,
+		Transport: &internalErrorRoundtripper{parent: upstreamTransport},
 		Rewrite: func(r *httputil.ProxyRequest) {
+			r.Out.Header.Del(internalErrorHeader)
 			r.SetXForwarded()
 			r.SetURL(upstreamURL)
 
@@ -63,9 +80,34 @@ func main() {
 				log.Printf("Failed to get request info: %v", err)
 				return
 			}
-			log.Printf("RequestInfo: %+v", requestInfo)
+
+			rawJWT := strings.TrimPrefix(r.In.Header.Get("Authorization"), "Bearer ")
+			if rawJWT == "" || strings.HasPrefix(rawJWT, "Basic ") {
+				r.Out.Header.Set(internalErrorHeader, "Only Bearer tokens are supported for authentication")
+				return
+			}
+			tokenReview, err := upstreamAuthenticationClient.TokenReviews().Create(r.In.Context(), &authenticationv1.TokenReview{
+				Spec: authenticationv1.TokenReviewSpec{
+					Token: rawJWT,
+				},
+			}, metav1.CreateOptions{})
+			if err != nil {
+				log.Printf("Failed to create TokenReview: %v", err)
+				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to create TokenReview: %v", err))
+				return
+			}
+			if !tokenReview.Status.Authenticated {
+				log.Printf("Token is not authenticated: %v", tokenReview.Status.Error)
+				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Token is not authenticated: %v", tokenReview.Status.Error))
+				return
+			}
+			userInfo := tokenReview.Status.User
+
+			log.Printf("RequestInfo: %+v, UserInfo: %+v", requestInfo, userInfo)
 
 			if requestInfo.Namespace != "" {
+				// Pass request through without modification if it's namespaced, as we only want to modify cluster-scoped requests.
+				proxyrequest.SetImpersonationHeaders(r.Out, &userInfo)
 				return
 			}
 
@@ -88,7 +130,8 @@ func main() {
 				log.Printf("Failed to get request info: %v", err)
 				return err
 			}
-			log.Printf("ModifyResponse RequestInfo: %+v", requestInfo)
+
+			log.Println("Headers", res.Request.Header, res.Header)
 
 			if requestInfo.Verb != "create" ||
 				requestInfo.APIGroup != authorizationv1.SchemeGroupVersion.Group ||
@@ -96,6 +139,8 @@ func main() {
 				requestInfo.Resource != "selfsubjectaccessreviews" {
 				return nil
 			}
+
+			log.Printf("Modifying SelfSubjectAccessReview response for request: %+v", requestInfo)
 
 			rawBody, err := io.ReadAll(res.Body)
 			if err != nil {
@@ -183,4 +228,26 @@ func newDecoder() (*runtime.Scheme, runtime.Decoder, error) {
 
 func jsonEncode(obj runtime.Object, scheme *runtime.Scheme) ([]byte, error) {
 	return runtime.Encode(json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{}), obj)
+}
+
+type internalErrorRoundtripper struct {
+	parent http.RoundTripper
+}
+
+func (rtf *internalErrorRoundtripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	if err, ok := r.Header[internalErrorHeader]; ok {
+		if r.Body != nil {
+			io.Copy(io.Discard, r.Body)
+			r.Body.Close()
+		}
+		return nil, errors.New(strings.Join(err, ","))
+	}
+	return rtf.parent.RoundTrip(r)
+}
+
+func impersonationEmpty(restConf *rest.Config) bool {
+	return restConf.Impersonate.UserName == "" &&
+		restConf.Impersonate.UID == "" &&
+		len(restConf.Impersonate.Groups) == 0 &&
+		len(restConf.Impersonate.Extra) == 0
 }
