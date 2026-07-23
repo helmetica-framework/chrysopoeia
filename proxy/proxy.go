@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 	"log"
 	"mime"
 	"net/http"
-	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
 	"slices"
@@ -29,46 +28,43 @@ import (
 	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-const labelSelector = "requires.helmetica.io/mariadbs.k8s.mariadb.com"
 const internalErrorHeader = "X-Chrysopoeia-Proxy-Error"
 
-func main() {
+func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, error) {
 	flag.Parse()
 
 	scheme, decoder, err := newDecoder()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	protoEncoder := protobuf.NewSerializer(scheme, scheme)
 
-	upstreamRestConf := ctrl.GetConfigOrDie()
-
 	if !impersonationEmpty(upstreamRestConf) {
-		log.Fatal("Impersonation is not supported for the upstream config")
+		return nil, fmt.Errorf("impersonation is not supported for the upstream config")
 	}
 
 	upstreamAuthenticationClient, err := authenticationv1client.NewForConfig(upstreamRestConf)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	upstreamTransportConf, err := upstreamRestConf.TransportConfig()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	upstreamTransport, err := transport.New(upstreamTransportConf)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	upstreamURL, err := url.Parse(upstreamRestConf.Host)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	frontendProxy := httptest.NewTLSServer(&httputil.ReverseProxy{
+
+	return &httputil.ReverseProxy{
 		Transport: &internalErrorRoundtripper{parent: upstreamTransport},
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.Out.Header.Del(internalErrorHeader)
@@ -111,7 +107,7 @@ func main() {
 				return
 			}
 
-			ls := labelSelector
+			ls := injectedLabel
 			q := r.Out.URL.Query()
 			if existing := q.Get("labelSelector"); existing != "" {
 				ls = strings.Join([]string{existing, ls}, ",")
@@ -194,12 +190,7 @@ func main() {
 
 			return nil
 		},
-	})
-	defer frontendProxy.Close()
-
-	log.Printf("Proxy server listening on %s", frontendProxy.URL)
-
-	select {}
+	}, nil
 }
 
 func decodeRequestInfo(req *http.Request) (*request.RequestInfo, error) {
