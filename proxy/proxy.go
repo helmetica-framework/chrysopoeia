@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -28,6 +29,8 @@ import (
 const labelSelector = "requires.helmetica.io/mariadbs.k8s.mariadb.com"
 
 func main() {
+	flag.Parse()
+
 	scheme, decoder, err := newDecoder()
 	if err != nil {
 		log.Fatal(err)
