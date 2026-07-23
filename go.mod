@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/fluxcd/helm-controller/api v1.6.2
+	github.com/fluxcd/helm-controller/api v1.6.3
 	github.com/fluxcd/image-reflector-controller/api v1.2.1
 	github.com/fluxcd/source-controller/api v1.9.1
 	github.com/spf13/cobra v1.10.2
