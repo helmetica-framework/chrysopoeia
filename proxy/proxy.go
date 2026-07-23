@@ -52,7 +52,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	frontendProxy := httptest.NewServer(&httputil.ReverseProxy{
+	frontendProxy := httptest.NewTLSServer(&httputil.ReverseProxy{
 		Transport: upstreamTransport,
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetXForwarded()
