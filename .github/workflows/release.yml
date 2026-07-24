@@ -61,7 +61,6 @@ jobs:
           args: release --release-notes .github/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_REPO_TOKEN: ${{ secrets.RELEASE_GH_PAT }}
           REGISTRY: ghcr.io
           IMAGE_NAME: ${{ github.repository }}
 
