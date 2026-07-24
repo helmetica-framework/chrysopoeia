@@ -82,6 +82,8 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 				r.Out.Header.Set(internalErrorHeader, "Only Bearer tokens are supported for authentication")
 				return
 			}
+			r.Out.Header.Del("Authorization")
+
 			tokenReview, err := upstreamAuthenticationClient.TokenReviews().Create(r.In.Context(), &authenticationv1.TokenReview{
 				Spec: authenticationv1.TokenReviewSpec{
 					Token: rawJWT,
