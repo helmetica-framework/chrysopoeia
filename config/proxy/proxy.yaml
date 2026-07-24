@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  name: proxy-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  namespace: proxy-system
+  labels:
+    chrysopoeia-component: proxy
+spec:
+  selector:
+    matchLabels:
+      chrysopoeia-component: proxy
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: proxy
+      labels:
+        chrysopoeia-component: proxy
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - args:
+        - proxy
+        - --addr=:8443
+        - --cert-path=/tmp/proxy-serving-certs
+        - --injected-label=requires.helmetica.io/mariadbs.k8s.mariadb.com
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: ghcr.io/helmetica-framework/chrysopoeia:latest
+        name: proxy
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - "ALL"
+        # livenessProbe:
+        #   httpGet:
+        #     path: /healthz
+        #     port: 8081
+        #   initialDelaySeconds: 15
+        #   periodSeconds: 20
+        # readinessProbe:
+        #   httpGet:
+        #     path: /readyz
+        #     port: 8081
+        #   initialDelaySeconds: 5
+        #   periodSeconds: 10
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /tmp/proxy-serving-certs
+          name: proxy-serving-certs
+          readOnly: true
+        ports: []
+      serviceAccountName: proxy
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: proxy-serving-certs
+        secret:
+          secretName: proxy-serving-cert
+          optional: false
+          items:
+            - key: ca.crt
+              path: ca.crt
+            - key: tls.crt
+              path: tls.crt
+            - key: tls.key
+              path: tls.key
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: proxy
+  namespace: proxy-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: proxy-role
+rules:
+- apiGroups:
+  - "*"
+  resources:
+  - "*"
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - ''
+  - authentication.k8s.io
+  resources:
+  - '*'
+  verbs:
+  - impersonate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: proxy-role
+subjects:
+- kind: ServiceAccount
+  name: proxy
+  namespace: proxy-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: proxy-system
+spec:
+  selector:
+    chrysopoeia-component: proxy
+  ports:
+  - protocol: TCP
+    port: 8443
+    targetPort: 8443

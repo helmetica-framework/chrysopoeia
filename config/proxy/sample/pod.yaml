@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sa-token-test
+spec:
+  containers:
+  - name: container-test
+    env:
+    - name: KUBECONFIG
+      value: /proxy-kubeconfig/kubeconfig
+    image: docker.io/alpine/kubectl:latest
+    command: ["sleep", "3600"]
+    volumeMounts:
+    - name: proxy-kubeconfig
+      mountPath: "/proxy-kubeconfig"
+      readOnly: true
+  serviceAccountName: default
+  automountServiceAccountToken: true
+  volumes:
+  - name: proxy-kubeconfig
+    configMap:
+      name: proxy-kubeconfig
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxy-kubeconfig
+data:
+  kubeconfig: |
+    apiVersion: v1
+    clusters:
+    - cluster:
+        server: https://chrysopoeia-proxy.chrysopoeia-proxy-system.svc.cluster.local:8443
+        certificate-authority: ./ca.crt
+      name: proxy
+    contexts:
+    - context:
+        cluster: proxy
+        user: proxy
+      name: proxy
+    current-context: proxy
+    kind: Config
+    users:
+    - name: proxy
+      user:
+        tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+  #### Insert your cert or use trust manager or do what you want. I'm not your mom.
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIDLDCCAhSgAwIBAgIUEDaV6dFdbIBRaq7OH7IsbTDW26kwDQYJKoZIhvcNAQEL
+    BQAwADAeFw0yNjA3MjQxMDIyMzJaFw0yNjEwMjIxMDIyMzJaMAAwggEiMA0GCSqG
+    SIb3DQEBAQUAA4IBDwAwggEKAoIBAQCnWv4nCwF3CqMtGqHph70Moe70OgDRwoJX
+    z7oqspYy9mCTX8R5SK5NZbWXzchDHEh60cGc+GPVI6B2CfSGYJA7CxPhJuxOOiIG
+    rFQ/d40ePbmiUTLG3JaL4sH3PPsHrbPSn059BLgTxtnEFzQ6Y3Kqw55vZoZ5zPTI
+    yD7Awvm04RvVw4GMt8YBd/B76Nx5EqpQjF+V4SnXYiY41aUmSrl0bS21O3qLfPKb
+    RG+wvlV1pERvDwbY8uhKiPpiqGfRdkev6sPvV5qGzJG8xQRkXNtNtb+Rj4ftWB+m
+    u3S9uNtgXFkoltKzE+J4q8p6N0cP5QajGmuwAaZxMOvMaonPKYQZAgMBAAGjgZ0w
+    gZowDgYDVR0PAQH/BAQDAgWgMAwGA1UdEwEB/wQCMAAwegYDVR0RAQH/BHAwboIu
+    Y2hyeXNvcG9laWEtcHJveHkuY2hyeXNvcG9laWEtcHJveHktc3lzdGVtLnN2Y4I8
+    Y2hyeXNvcG9laWEtcHJveHkuY2hyeXNvcG9laWEtcHJveHktc3lzdGVtLnN2Yy5j
+    bHVzdGVyLmxvY2FsMA0GCSqGSIb3DQEBCwUAA4IBAQAlWpK5nC92c/qxze06PMCQ
+    qHrVKAJMG2IZYwYYNruT063n4Lp8V8eKQ4QYMYx9P1rwYVJGjmzw0ytUYgakz7nr
+    SxBzQFnGeJIETewp7whattU0iElpF1549Ch3QwuZg8bBabvFz4sfZhX71yOu9XpC
+    Nv+js3zgVdtm3Yk8hzZCt6OiKK5eWP2dB/ZZwZjuadxWUV75sRMQ39gt0vUiep43
+    Ck2bBxwXU9zEueuZvOwp8H21XL7VD3Nx2ns8qSJiU2hwsViSdNFfwVWQ0BRXnEQG
+    VRWCcjgV+F3oVCsbGRB6bDjfLb+hjefOuEGTWQ+dmL5BUSn37FVkUzRcrkyOVht/
+    -----END CERTIFICATE-----
