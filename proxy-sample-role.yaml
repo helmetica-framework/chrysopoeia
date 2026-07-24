@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: scopedlist:requires.helmetica.io:mariadbs.k8s.mariadb.com
+rules:
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - scopedlist
+  resourceNames:
+  # The requested label key is tested against the resourceNames
+  - requires.helmetica.io/mariadbs.k8s.mariadb.com
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: proxy:sa:scopedlist:requires.helmetica.io:mariadbs.k8s.mariadb.com
+subjects:
+- kind: ServiceAccount
+  name: through-proxy
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: scopedlist:requires.helmetica.io:mariadbs.k8s.mariadb.com
+  apiGroup: rbac.authorization.k8s.io

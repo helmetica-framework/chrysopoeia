@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,7 +15,6 @@ import (
 	"slices"
 	"strings"
 
-	proxyrequest "github.com/helmetica-framework/chrysopoeia/proxy/request"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,11 +26,13 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server"
 	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
+	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 )
 
 const internalErrorHeader = "X-Chrysopoeia-Proxy-Error"
+const scopedListVerb = "scopedlist"
 
 func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, error) {
 	flag.Parse()
@@ -49,10 +51,17 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 	if err != nil {
 		return nil, err
 	}
+	upstreamAuthorizationClient, err := authorizationv1client.NewForConfig(upstreamRestConf)
+	if err != nil {
+		return nil, err
+	}
 
 	upstreamTransportConf, err := upstreamRestConf.TransportConfig()
 	if err != nil {
 		return nil, err
+	}
+	if upstreamTransportConf.HasCertAuth() || upstreamTransportConf.HasCertCallback() {
+		return nil, fmt.Errorf("client certificate authentication is not supported for the upstream config")
 	}
 	upstreamTransport, err := transport.New(upstreamTransportConf)
 	if err != nil {
@@ -77,37 +86,33 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 				return
 			}
 
-			rawJWT := strings.TrimPrefix(r.In.Header.Get("Authorization"), "Bearer ")
-			if rawJWT == "" || strings.HasPrefix(rawJWT, "Basic ") {
-				r.Out.Header.Set(internalErrorHeader, "Only Bearer tokens are supported for authentication")
+			if !requestNeedsRewrite(requestInfo) {
 				return
 			}
-			r.Out.Header.Del("Authorization")
 
-			tokenReview, err := upstreamAuthenticationClient.TokenReviews().Create(r.In.Context(), &authenticationv1.TokenReview{
-				Spec: authenticationv1.TokenReviewSpec{
-					Token: rawJWT,
-				},
-			}, metav1.CreateOptions{})
+			userInfo, err := extractUserInfoFromAuthHeader(r.In.Context(), upstreamAuthenticationClient, r.In.Header.Get("Authorization"))
 			if err != nil {
-				log.Printf("Failed to create TokenReview: %v", err)
-				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to create TokenReview: %v", err))
+				log.Printf("Failed to extract user info from bearer token: %v", err)
+				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to extract user info from bearer token: %v", err))
 				return
 			}
-			if !tokenReview.Status.Authenticated {
-				log.Printf("Token is not authenticated: %v", tokenReview.Status.Error)
-				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Token is not authenticated: %v", tokenReview.Status.Error))
-				return
-			}
-			userInfo := tokenReview.Status.User
 
-			log.Printf("RequestInfo: %+v, UserInfo: %+v", requestInfo, userInfo)
+			log.Printf("Rewriting request. RequestInfo: %+v, UserInfo: %+v", requestInfo, userInfo)
 
-			if requestInfo.Namespace != "" {
-				// Pass request through without modification if it's namespaced, as we only want to modify cluster-scoped requests.
-				proxyrequest.SetImpersonationHeaders(r.Out, &userInfo)
+			allowed, reason, err := checkCustomVerbAccess(r.In.Context(), upstreamAuthorizationClient, requestInfo, userInfo, injectedLabel)
+			if err != nil {
+				log.Printf("Failed to check custom verb access: %v", err)
+				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to check custom verb access: %v", err))
 				return
 			}
+			if !allowed {
+				log.Printf("User %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, injectedLabel, reason)
+				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("User %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, injectedLabel, reason))
+				return
+			}
+
+			// Use our authentication that has cluster scoped list/watch.
+			r.Out.Header.Del("Authorization")
 
 			ls := injectedLabel
 			q := r.Out.URL.Query()
@@ -116,6 +121,12 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 			}
 			q.Set("labelSelector", ls)
 			r.Out.URL.RawQuery = q.Encode()
+		},
+
+		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, err error) {
+			rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			rw.WriteHeader(http.StatusInternalServerError)
+			_, _ = rw.Write([]byte(fmt.Sprintf("Proxy error: %s", err.Error())))
 		},
 
 		ModifyResponse: func(res *http.Response) error {
@@ -129,8 +140,6 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 				return err
 			}
 
-			log.Println("Headers", res.Request.Header, res.Header)
-
 			if requestInfo.Verb != "create" ||
 				requestInfo.APIGroup != authorizationv1.SchemeGroupVersion.Group ||
 				requestInfo.APIVersion != authorizationv1.SchemeGroupVersion.Version ||
@@ -139,6 +148,13 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 			}
 
 			log.Printf("Modifying SelfSubjectAccessReview response for request: %+v", requestInfo)
+
+			userInfo, err := extractUserInfoFromAuthHeader(res.Request.Context(), upstreamAuthenticationClient, res.Request.Header.Get("Authorization"))
+			if err != nil {
+				log.Printf("Failed to extract user info from bearer token: %v", err)
+				res.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to extract user info from bearer token: %v", err))
+				return fmt.Errorf("failed to extract user info from request header: %w", err)
+			}
 
 			rawBody, err := io.ReadAll(res.Body)
 			if err != nil {
@@ -154,12 +170,20 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 
 			switch obj := decodedObj.(type) {
 			case *authorizationv1.SelfSubjectAccessReview:
-				if !obj.Status.Allowed && obj.Spec.ResourceAttributes.Namespace == "" &&
-					slices.ContainsFunc([]string{"list", "watch"}, func(verb string) bool { return strings.EqualFold(verb, obj.Spec.ResourceAttributes.Verb) }) {
+				if !obj.Status.Allowed &&
+					obj.Spec.ResourceAttributes.Namespace == "" &&
+					matchesListWatchVerb(obj.Spec.ResourceAttributes.Verb) {
 					log.Printf("Allowing cluster-scoped access through proxy for resource %s/%s with verb %s\n", obj.Spec.ResourceAttributes.Group, obj.Spec.ResourceAttributes.Resource, obj.Spec.ResourceAttributes.Verb)
-					obj.Status.Allowed = true
-					obj.Status.Denied = false
-					obj.Status.Reason = "Access allowed through helmetica.io proxy for cluster-scoped resources"
+
+					allowed, reason, err := checkCustomVerbAccess(res.Request.Context(), upstreamAuthorizationClient, requestInfo, userInfo, injectedLabel)
+					if err != nil {
+						log.Printf("Failed to check custom verb access: %v", err)
+						res.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to check custom verb access: %v", err))
+						return fmt.Errorf("failed to check custom verb access: %w", err)
+					}
+					obj.Status.Allowed = allowed
+					obj.Status.Denied = !allowed
+					obj.Status.Reason = fmt.Sprintf("Access managed through helmetica.io proxy for cluster-scoped resources: %s (Upstream reason: %s)", reason, obj.Status.Reason)
 				}
 				decodedObj = obj
 			default:
@@ -195,8 +219,8 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 	}, nil
 }
 
-func decodeRequestInfo(req *http.Request) (*request.RequestInfo, error) {
-	return new(request.RequestInfoFactory{
+func decodeRequestInfo(req *http.Request) (request.RequestInfo, error) {
+	ri, err := new(request.RequestInfoFactory{
 		APIPrefixes: sets.NewString(
 			strings.Trim(server.APIGroupPrefix, "/"),
 			strings.Trim(server.DefaultLegacyAPIPrefix, "/"),
@@ -205,6 +229,13 @@ func decodeRequestInfo(req *http.Request) (*request.RequestInfo, error) {
 			strings.Trim(server.DefaultLegacyAPIPrefix, "/"),
 		),
 	}).NewRequestInfo(req)
+	if err != nil {
+		return request.RequestInfo{}, err
+	}
+	if ri == nil {
+		return request.RequestInfo{}, errors.New("request info is nil")
+	}
+	return *ri, nil
 }
 
 func newDecoder() (*runtime.Scheme, runtime.Decoder, error) {
@@ -243,4 +274,60 @@ func impersonationEmpty(restConf *rest.Config) bool {
 		restConf.Impersonate.UID == "" &&
 		len(restConf.Impersonate.Groups) == 0 &&
 		len(restConf.Impersonate.Extra) == 0
+}
+
+func extractUserInfoFromAuthHeader(ctx context.Context, upstreamAuthenticationClient authenticationv1client.AuthenticationV1Interface, authHeader string) (authenticationv1.UserInfo, error) {
+	rawJWT := strings.TrimPrefix(authHeader, "Bearer ")
+	if rawJWT == "" || strings.HasPrefix(rawJWT, "Basic ") {
+		return authenticationv1.UserInfo{}, fmt.Errorf("only Bearer tokens are supported for authentication")
+	}
+
+	tokenReview, err := upstreamAuthenticationClient.TokenReviews().Create(ctx, &authenticationv1.TokenReview{
+		Spec: authenticationv1.TokenReviewSpec{
+			Token: rawJWT,
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return authenticationv1.UserInfo{}, fmt.Errorf("failed to create TokenReview: %w", err)
+	}
+	if !tokenReview.Status.Authenticated {
+		return authenticationv1.UserInfo{}, fmt.Errorf("token is not authenticated: %s", tokenReview.Status.Error)
+	}
+	return tokenReview.Status.User, nil
+}
+
+func checkCustomVerbAccess(ctx context.Context, authClient authorizationv1client.AuthorizationV1Interface, requestInfo request.RequestInfo, userInfo authenticationv1.UserInfo, injectedLabel string) (bool, string, error) {
+	extra := make(map[string]authorizationv1.ExtraValue)
+	for k, v := range userInfo.Extra {
+		extra[k] = authorizationv1.ExtraValue(v)
+	}
+	ssar, err := authClient.SubjectAccessReviews().Create(ctx, &authorizationv1.SubjectAccessReview{
+		Spec: authorizationv1.SubjectAccessReviewSpec{
+			User:   userInfo.Username,
+			UID:    userInfo.UID,
+			Groups: userInfo.Groups,
+			Extra:  extra,
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Verb:     scopedListVerb,
+				Group:    requestInfo.APIGroup,
+				Version:  requestInfo.APIVersion,
+				Resource: requestInfo.Resource,
+				Name:     injectedLabel,
+			},
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return false, "", fmt.Errorf("failed to create SubjectAccessReview: %w", err)
+	}
+	return ssar.Status.Allowed, ssar.Status.Reason, nil
+}
+
+func requestNeedsRewrite(requestInfo request.RequestInfo) bool {
+	return requestInfo.IsResourceRequest &&
+		requestInfo.Namespace == "" &&
+		matchesListWatchVerb(requestInfo.Verb)
+}
+
+func matchesListWatchVerb(verb string) bool {
+	return slices.ContainsFunc([]string{"list", "watch"}, func(v string) bool { return strings.EqualFold(v, verb) })
 }
