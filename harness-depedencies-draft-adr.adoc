@@ -1,0 +1,192 @@
+= Operator Harness / Dependencies Draft ADR
+
+:1: https://github.com/kubernetes/client-go/blob/9d3b5319efa3bffdd17a982ae7649831c830a4de/rest/config.go#L546
+:2: https://github.com/helmetica-framework/chrysopoeia/blob/03cce7e1d609f54d8b7d9cb81750966f84e0f21e/config/proxy/permission-label-map.yaml
+:3: https://github.com/NVIDIA/gpu-operator/blob/3fad6727475bde1cf7ccbdf4ffdbcf4d807b0c71/manifests/state-dra-driver/0700_resourceslices-policy.yaml#L16
+
+## Problem Statement
+
+A growing amount of software on Kubernetes requires more than just a Helm chart to be deployed.
+Many services require an operator to be deployed alongside the Helm chart to manage the lifecycle of the service.
+
+Often those operators need cluster-wide permissions to manage the service, going so far as to need access to all secrets (including TLS private keys) in the cluster.
+Since we can't manage all the services by ourselves we're planning for our partners to more or less autonomously onboard service to the platform.
+
+We need to be able to trust the operators that our partners are deploying, and we need to be able to trust that they are not going to compromise the security of the cluster.
+We need to be able to verify that operators don't clash by trying to manage the same resources.
+Since CRDs are cluster-wide singleton resources, we need to be able to verify that there are no accidental clashes.
+
+Helm has a mechanism for dependencies, but it's not designed for operators, as it installs the dependencies for every release of the chart.
+The relationship we want service chart *is constrained by* the operator chart, and we want to be able to manage the operator chart independently of the service chart.
+
+## High level goals
+
+- Allow service charts to depend on operator charts, and allow operators to be deployed independently of the service charts.
+- Detect CRD clashes early and prevent them from being deployed to the cluster.
+- Allow platform engineers to verify that operators are not going to compromise the security of the cluster.
+
+## Proposed Architecture
+
+The proposed architecture is split into two modules: the service chart dependencies and the operator permission harness.
+
+### Service chart dependencies
+
+Both operator and service charts can reference a `DependencyGroup` CRD, which defines the relationship between the service and operator charts and bundles required CRDs and RBAC permissions.
+
+[source,yaml]
+----
+apiVersion: helmetica.io/v1
+kind: DependencyGroup
+metadata:
+  name: mariadb
+spec:
+  crds:
+  - name: backups.k8s.mariadb.com
+  - name: connections.k8s.mariadb.com
+  - name: databases.k8s.mariadb.com
+  harnessRef: <1>
+    kind: OperatorHarness
+    name: mariadb-operator
+status:
+  state: Accepted
+----
+<1> The `harnessRef` references an operator harness as defined in <<harness-proxy>>.
+
+Each `DependencyGroup` is cluster scoped and can reference multiple CRDs.
+A webhook or operator validates that no CRD is referenced by more than one `DependencyGroup`.
+
+A chart can become a provider chart by referencing the `DependencyGroup` in its metadata or in the `CustomResourceDefinitionSource` that makes the service installable.
+
+A chart can become a consumer chart by referencing the `DependencyGroup` in its metadata or in the `CustomResourceDefinitionSource` that makes the service installable.
+The framework, through the harness, will setup permissions for the provider chart to manage consumer chart resources.
+
+### Operator Permission Harness
+
+The operator harness is a separate project from Helmetica, the only interface is through the `OperatorHarness` CRD, where Helmetica will use it's own RBAC and labels.
+
+#### API/CRD
+
+[source,yaml]
+----
+apiVersion: vshn.net/v1
+kind: OperatorHarness
+metadata:
+  name: mariadb-operator
+spec:
+  scopeToLabel: requires.helmetica.io/operator-mariadb <1>
+  operator: <2>
+    namespace: mariadb-operator
+    serviceAccounts:
+    - operator-mariadb-operator
+    injectProxyConfiguration: true <3>
+  roleBindings: <4>
+    roleRefs:
+    - apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: admin
+  roles: <4>
+    rules:
+    - apiGroups: ["k8s.mariadb.com"]
+      resources: ["*"]
+      verbs: ["*"]
+    - apiGroups: [""]
+      resources: ["pods", "services", "endpoints", "persistentvolumeclaims", "events", "configmaps", "secrets"]
+      verbs: ["*"]
+  clusterRoleBindings: [] <5>
+  clusterRoles: <5>
+    rules:
+    - apiGroups: ["admissionregistration.k8s.io"]
+      resources: ["validatingwebhookconfigurations"]
+      resourceNames: ["mariadb-operator-webhook"]
+      verbs: ["get", "create", "update", "patch", "delete"]
+    - apiGroups: [""]
+      resources: ["pods", "services", "endpoints", "persistentvolumeclaims", "events", "configmaps", "secrets"]
+      verbs: ["scopedlist"] <6>
+      resourceNames: ["requires.helmetica.io/operator-mariadb"]
+----
+<1> The `scopeToLabel` defines the label that needs to be present on a resource for the harnessed operator to manage it.
+It is used to scope cluster-wide permissions.
+If the harnessed operator tries to do a cluster-scoped list, or watch, it will only see resources that have the label defined in `scopeToLabel`.
+<2> The `operator` defines the namespace and service accounts that the operator will use.
+<3> The `injectProxyConfiguration` defines if the operator should have the Harness Proxy injected into it.
+<4> The `roleBindings` and `roles` define the RBAC permissions that the harnessed operator will have.
+They are injected into every namespace with the `scopeToLabel` label.
+<5> The `clusterRoles` and `clusterRoleBindings` define the cluster-wide RBAC permissions that the harnessed operator will have.
+They are injected into the cluster with the `scopeToLabel` label.
+The rules should be very carefully defined, as they are cluster-wide and can possibly be used to compromise the security of the cluster.
+<6> The `scopedlist` verb is a custom verb that authorizes the harnessed operator to do a cluster-scoped list, or watch, but only for resources that have the `scopeToLabel` label.
+The `resourceNames` field is used to authorize the label that the harnessed operator is allowed to see.
+
+#### Harness Proxy [[harness-proxy]]
+
+The harness proxy sits between the harnessed operator and the Kubernetes API server.
+It intercepts all cluster scoped list and watch requests from the harnessed operator and, after authorizing the request, injects the `scopeToLabel` label into the `labelSelector` parameter of the request.
+The request is authorized with a custom verb `scopedlist` and the label in the `resourceNames` field that is only granted to the harnessed operator.
+
+Any other request is passed through to the Kubernetes API server without any modifications.
+
+##### Proxy injection
+
+Controller runtime controllers auto-connect to the Kubernetes API server with four parameters provided by Kubernetes: `KUBERNETES_SERVICE_HOST`, `KUBERNETES_SERVICE_PORT`, `/var/run/secrets/kubernetes.io/serviceaccount/token` and `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt` ({1}[Reference]).
+
+Those variables are injected into every pod by Kubernetes but can be overridden with a mutating admission webhook or policy:
+
+* `/var/run/secrets/kubernetes.io/serviceaccount/token` left as-is, authenticates the controller to Kubernetes and the proxy.
+* `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt` overridden to point to the proxy's CA certificate.
+* `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT` are overridden to point to the proxy service.
+
+The patch would look roughly as follows:
+
+[source,yaml]
+----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: manager
+spec:
+  automountServiceAccountToken: false
+  containers:
+  - name: manager
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: proxy-api-access
+      readOnly: true
+    env:
+    - name: KUBERNETES_SERVICE_HOST
+      value: proxy-service.proxy-namespace.svc
+    - name: KUBERNETES_SERVICE_PORT
+      value: "443"
+  volumes:
+  - name: proxy-api-access
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: proxy-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+----
+
+##### Label injection
+
+A mutating admission policy copies the `scopeToLabel` label from the namespace to all resources created in that namespace.
+The sample {2}[here] is a starting point but can be simplified if just copying one label.
+
+Another policy adds the label to all cluster scoped creates by checking the requesting user against the service account list in the `OperatorHarness` CRD.
+{3}[Sample match serviceaccounts].
+
+## References
+
+- {1}[controller-runtimes `InClusterConfig()`]
+- {2}[Chrysopoeia permission-label-map.yaml]
+- {3}[NVIDIA GPU Operator resourceslices-policy.yaml]
