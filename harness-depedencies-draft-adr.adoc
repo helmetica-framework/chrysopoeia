@@ -79,6 +79,11 @@ spec:
     serviceAccounts:
     - operator-mariadb-operator
     injectProxyConfiguration: true <3>
+  admissions: <7>
+  - apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingWebhookConfiguration
+    name: mariadb-operator-webhook
+    labelInjectionStrategy: ApplyPatch
   roleBindings: <4>
     roleRefs:
     - apiGroup: rbac.authorization.k8s.io
@@ -116,6 +121,9 @@ They are injected into the cluster with the `scopeToLabel` label.
 The rules should be very carefully defined, as they are cluster-wide and can possibly be used to compromise the security of the cluster.
 <6> The `scopedlist` verb is a custom verb that authorizes the harnessed operator to do a cluster-scoped list, or watch, but only for resources that have the `scopeToLabel` label.
 The `resourceNames` field is used to authorize the label that the harnessed operator is allowed to see.
+<7> Admission policy and webhooks are often used by operators to validate resources before they are created or updated.
+The harness can inject a namespace selector into the admission policy or webhook to scope resources to the chosen label.
+Also see <<admission-injection>>.
 
 #### Harness Proxy [[harness-proxy]]
 
@@ -186,6 +194,23 @@ Older clusters may use Espejote admission policies, which are similar to the mut
 
 Another policy adds the label to all cluster scoped creates by checking the requesting user against the service account list in the `OperatorHarness` CRD.
 {3}[Sample match serviceaccounts].
+
+
+##### Admission injection [[admission-injection]]
+
+Kubernetes allows `MutatingAdmissionPolicy`, `MutatingAdmissionPolicyBinding`, `ValidatingAdmissionPolicy` , and `ValidatingAdmissionPolicyBinding` to validate and modify requests to the Kubernetes API server.
+They are cluster scoped resources and are excluded from other validation and label injection policies.
+All of them contain a `namespaceSelector` field that can be used to scope the policy to a specific namespace.
+
+Almost all operators use admission policies or webhooks to validate resources before they are created or updated and we should support that.
+
+The harness can inject the `namespaceSelector` field into the admission policy or webhook to scope resources to the chosen label using server-side apply.
+
+There is a small risk of a race condition if the admission policy is created before the namespace selector is injected, but it's very brief and operators tend to retry failed requests, so it should be fine.
+Another option would be to have the harness proxy intercept the admission policy and webhook requests and inject the namespace selector into the request before it reaches the API server.
+This is more complicated and would require the harness proxy to be aware of the admission policy and webhook API, but it would eliminate the race condition.
+
+Since using server-side apply to inject the namespace selector is simpler and the race condition is very brief, we should start with that and only implement the more complicated solution if we run into problems.
 
 ## References
 
