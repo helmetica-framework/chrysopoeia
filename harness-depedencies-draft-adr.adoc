@@ -182,6 +182,8 @@ spec:
 A mutating admission policy copies the `scopeToLabel` label from the namespace to all resources created in that namespace.
 The sample {2}[here] is a starting point but can be simplified if just copying one label.
 
+Older clusters may use Espejote admission policies, which are similar to the mutating admission policies but have additional overhead because they go through a webhook instead of being executed in the API server.
+
 Another policy adds the label to all cluster scoped creates by checking the requesting user against the service account list in the `OperatorHarness` CRD.
 {3}[Sample match serviceaccounts].
 
