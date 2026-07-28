@@ -212,6 +212,26 @@ This is more complicated and would require the harness proxy to be aware of the 
 
 Since using server-side apply to inject the namespace selector is simpler and the race condition is very brief, we should start with that and only implement the more complicated solution if we run into problems.
 
+#### Reporting Mode
+
+[source,yaml]
+----
+apiVersion: vshn.net/v1
+kind: OperatorHarness
+metadata:
+  name: mariadb-operator
+spec:
+  mode: Report
+  operator:
+    namespace: mariadb-operator
+    serviceAccounts:
+    - operator-mariadb-operator
+    injectProxyConfiguration: true
+----
+
+The reporting mode allows the initial discovery of what the harnessed operator is doing in the cluster without actually enforcing any permissions or label injection.
+The harness proxy will report all requests from the harnessed operator to the Kubernetes API server and create an `OperatorHarnessReport` CRD with the details of the request. The report can be used to generate the enforcing `OperatorHarness` configuration.
+
 ## References
 
 - {1}[controller-runtimes `InClusterConfig()`]
