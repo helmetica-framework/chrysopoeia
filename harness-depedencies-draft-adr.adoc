@@ -137,35 +137,35 @@ Any other request is passed through to the Kubernetes API server without any mod
 |===
 |Request from operator
 |Request to Kubernetes API server
-|Token to Kubernetes API server
+|Authorization
 
 |`/api/v1/namespaces/default/pods`
 |`/api/v1/namespaces/default/pods`
-|Original
+|Upstream
 
 |`/api/v1/namespaces/default/pods/database-1`
 |`/api/v1/namespaces/default/pods/database-1`
-|Original
+|Upstream
 
 |`/api/v1/pods`
 |`/api/v1/namespaces/default/pods?labelSelector=scopingLabel`
-|Harness
+|Harness (verb=scopedlist, resourceNames=scopingLabel)
 
 |`/api/v1/pods?limit=500`
 |`/api/v1/pods?limit=500&labelSelector=scopingLabel`
-|Harness
+|Harness (verb=scopedlist, resourceNames=scopingLabel)
 
 |`/api/v1/pods?labelSelector=role%3Dbackend`
 |`/api/v1/pods?labelSelector=role%3Dbackend%2CscopingLabel`
-|Harness
+|Harness (verb=scopedlist, resourceNames=scopingLabel)
 
 |`/apis/rbac.authorization.k8s.io/v1/clusterroles/admin`
 |`/apis/rbac.authorization.k8s.io/v1/clusterroles/admin`
-|Original
+|Upstream
 
 |`/apis/rbac.authorization.k8s.io/v1/clusterroles`
 |`/apis/rbac.authorization.k8s.io/v1/clusterroles?labelSelector=scopingLabel`
-|Harness
+|Harness (verb=scopedlist, resourceNames=scopingLabel)
 |===
 
 ##### Proxy injection
