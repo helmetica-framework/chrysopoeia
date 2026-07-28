@@ -127,11 +127,46 @@ Also see <<admission-injection>>.
 
 #### Harness Proxy [[harness-proxy]]
 
-The harness proxy sits between the harnessed operator and the Kubernetes API server.
+The harness proxy is a reverse proxy sitting between the harnessed operator and the Kubernetes API server.
 It intercepts all cluster scoped list and watch requests from the harnessed operator and, after authorizing the request, injects the `scopeToLabel` label into the `labelSelector` parameter of the request.
 The request is authorized with a custom verb `scopedlist` and the label in the `resourceNames` field that is only granted to the harnessed operator.
 
 Any other request is passed through to the Kubernetes API server without any modifications.
+
+[cols="1,1,1"]
+|===
+|Request from operator
+|Request to Kubernetes API server
+|Token to Kubernetes API server
+
+|`/api/v1/namespaces/default/pods`
+|`/api/v1/namespaces/default/pods`
+|Original
+
+|`/api/v1/namespaces/default/pods/database-1`
+|`/api/v1/namespaces/default/pods/database-1`
+|Original
+
+|`/api/v1/pods`
+|`/api/v1/namespaces/default/pods?labelSelector=scopingLabel`
+|Harness
+
+|`/api/v1/pods?limit=500`
+|`/api/v1/pods?limit=500&labelSelector=scopingLabel`
+|Harness
+
+|`/api/v1/pods?labelSelector=role%3Dbackend`
+|`/api/v1/pods?labelSelector=role%3Dbackend%2CscopingLabel`
+|Harness
+
+|`/apis/rbac.authorization.k8s.io/v1/clusterroles/admin`
+|`/apis/rbac.authorization.k8s.io/v1/clusterroles/admin`
+|Original
+
+|`/apis/rbac.authorization.k8s.io/v1/clusterroles`
+|`/apis/rbac.authorization.k8s.io/v1/clusterroles?labelSelector=scopingLabel`
+|Harness
+|===
 
 ##### Proxy injection
 
