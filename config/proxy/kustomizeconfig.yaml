@@ -6,3 +6,9 @@ nameReference:
   - kind: Certificate
     group: cert-manager.io
     path: spec/issuerRef/name
+- kind: MutatingAdmissionPolicy
+  group: admissionregistration.k8s.io
+  fieldSpecs:
+  - kind: MutatingAdmissionPolicyBinding
+    group: admissionregistration.k8s.io
+    path: spec/policyName

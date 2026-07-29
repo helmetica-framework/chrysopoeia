@@ -1,7 +1,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
-  name: "chrysopoeia-instances-namespaced-requires-labels"
+  name: "instances-namespaced-requires-labels"
   annotations:
     description: |
       This policy ensures that all resources created in namespaces with the label "chrysopoeia.io/instance"
@@ -46,6 +46,6 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
 metadata:
-  name: "chrysopoeia-instances-namespaced-requires-labels"
+  name: "instances-namespaced-requires-labels"
 spec:
-  policyName: "chrysopoeia-instances-namespaced-requires-labels"
+  policyName: "instances-namespaced-requires-labels"
