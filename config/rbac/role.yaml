@@ -91,11 +91,10 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
-  - clusterroles
+  - clusterrolebindings
+  - rolebindings
   verbs:
-  - bind
   - create
-  - escalate
   - get
   - list
   - patch
@@ -104,9 +103,11 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
-  - rolebindings
+  - clusterroles
   verbs:
+  - bind
   - create
+  - escalate
   - get
   - list
   - patch
