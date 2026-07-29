@@ -194,29 +194,31 @@ func runController(cmd *cobra.Command, _ []string) error {
 		LeaderElectionID:       "4ede2161a2.chrysopoeia.helmetica.io",
 
 		Cache: cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				controllerNamespace: {},
-			},
 			ByObject: map[client.Object]cache.ByObject{
+				&chrysopoeiav1.CustomResourceDefinitionSource{}: {
+					Namespaces: map[string]cache.Config{
+						controllerNamespace: {},
+					},
+				},
+				&imagereflectorv1.ImageRepository{}: {
+					Namespaces: map[string]cache.Config{
+						controllerNamespace: {},
+					},
+				},
+				&sourcev1.OCIRepository{}: {
+					Namespaces: map[string]cache.Config{
+						controllerNamespace: {},
+					},
+				},
+
 				&apiextv1.CustomResourceDefinition{}: {
 					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
 				},
 				&helmv2.HelmRelease{}: {
-					Namespaces: map[string]cache.Config{
-						cache.AllNamespaces: {},
-					},
 					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
 				},
-				&rbacv1.RoleBinding{}: {
-					Namespaces: map[string]cache.Config{
-						cache.AllNamespaces: {},
-					},
-				},
-				&corev1.ServiceAccount{}: {
-					Namespaces: map[string]cache.Config{
-						cache.AllNamespaces: {},
-					},
-				},
+				&rbacv1.RoleBinding{}:    {},
+				&corev1.ServiceAccount{}: {},
 			},
 		},
 
