@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"strings"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,9 +39,11 @@ func (r *RBACAggregatorManager) Reconcile(ctx context.Context, _ reconcile.Reque
 	editRules := make([]*rbacv1ac.PolicyRuleApplyConfiguration, len(crds.Items))
 	viewRules := make([]*rbacv1ac.PolicyRuleApplyConfiguration, len(crds.Items))
 	for i, crd := range crds.Items {
-		adminRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(crd.Spec.Names.Plural).WithVerbs("*")
-		editRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(crd.Spec.Names.Plural).WithVerbs("create", "update", "patch", "delete")
-		viewRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(crd.Spec.Names.Plural).WithVerbs("get", "list", "watch")
+		resource := crd.Spec.Names.Plural
+		statusSubresource := strings.Join([]string{resource, "status"}, ".")
+		adminRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(resource, statusSubresource).WithVerbs("*")
+		editRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(resource, statusSubresource).WithVerbs("create", "update", "patch", "delete")
+		viewRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(resource, statusSubresource).WithVerbs("get", "list", "watch")
 	}
 
 	adminCR := rbacv1ac.
