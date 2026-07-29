@@ -400,7 +400,7 @@ const (
 	versionDiscoveryReferenceIndexField = ".spec.versionDiscovery.reference.name"
 )
 
-func (r *CustomResourceDefinitionSourceManager) SetupWithManager(name string, mgr ctrl.Manager) error {
+func (r *CustomResourceDefinitionSourceManager) SetupWithManager(name string, mgr ctrl.Manager, controllerNamespace string) error {
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &chrysopoeiav1.CustomResourceDefinitionSource{}, sourceReferenceIndexField, func(rawObj client.Object) []string {
 		source := rawObj.(*chrysopoeiav1.CustomResourceDefinitionSource)
 		if source.Spec.Reference.Name == "" {
@@ -422,14 +422,18 @@ func (r *CustomResourceDefinitionSourceManager) SetupWithManager(name string, mg
 
 	return builder.ControllerManagedBy(mgr).
 		For(&chrysopoeiav1.CustomResourceDefinitionSource{}).
-		Watches(&sourcev1.OCIRepository{}, handler.EnqueueRequestsFromMapFunc(ociRepositoryToCustomResourceDefinitionSourceMapFunc(mgr.GetClient()))).
-		Watches(&imagereflectorv1.ImageRepository{}, handler.EnqueueRequestsFromMapFunc(imageRepositoryToCustomResourceDefinitionSourceMapFunc(mgr.GetClient()))).
+		Watches(&sourcev1.OCIRepository{}, handler.EnqueueRequestsFromMapFunc(ociRepositoryToCustomResourceDefinitionSourceMapFunc(mgr.GetClient(), controllerNamespace))).
+		Watches(&imagereflectorv1.ImageRepository{}, handler.EnqueueRequestsFromMapFunc(imageRepositoryToCustomResourceDefinitionSourceMapFunc(mgr.GetClient(), controllerNamespace))).
 		Named(name).
 		Complete(r)
 }
 
-func ociRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client) func(ctx context.Context, o client.Object) []reconcile.Request {
+func ociRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client, controllerNamespace string) func(ctx context.Context, o client.Object) []reconcile.Request {
 	return func(ctx context.Context, o client.Object) []reconcile.Request {
+		if o.GetNamespace() != controllerNamespace {
+			return nil
+		}
+
 		var crds chrysopoeiav1.CustomResourceDefinitionSourceList
 		if err := c.List(ctx, &crds, client.InNamespace(o.GetNamespace()), client.MatchingFields{sourceReferenceIndexField: o.GetName()}); err != nil {
 			log.FromContext(ctx).Error(err, "Failed to list CustomResourceDefinitionSources")
@@ -444,8 +448,12 @@ func ociRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client) func(
 	}
 }
 
-func imageRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client) func(ctx context.Context, o client.Object) []reconcile.Request {
+func imageRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client, controllerNamespace string) func(ctx context.Context, o client.Object) []reconcile.Request {
 	return func(ctx context.Context, o client.Object) []reconcile.Request {
+		if o.GetNamespace() != controllerNamespace {
+			return nil
+		}
+
 		var crds chrysopoeiav1.CustomResourceDefinitionSourceList
 		if err := c.List(ctx, &crds, client.InNamespace(o.GetNamespace()), client.MatchingFields{versionDiscoveryReferenceIndexField: o.GetName()}); err != nil {
 			log.FromContext(ctx).Error(err, "Failed to list CustomResourceDefinitionSources")

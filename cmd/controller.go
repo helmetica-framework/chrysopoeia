@@ -200,16 +200,6 @@ func runController(cmd *cobra.Command, _ []string) error {
 						controllerNamespace: {},
 					},
 				},
-				&imagereflectorv1.ImageRepository{}: {
-					Namespaces: map[string]cache.Config{
-						controllerNamespace: {},
-					},
-				},
-				&sourcev1.OCIRepository{}: {
-					Namespaces: map[string]cache.Config{
-						controllerNamespace: {},
-					},
-				},
 
 				&apiextv1.CustomResourceDefinition{}: {
 					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
@@ -242,7 +232,7 @@ func runController(cmd *cobra.Command, _ []string) error {
 		SourceControllerHostnameOverride: sourceControllerHostnameOverride,
 		ImageReflectorControllerHostname: imageReflectorControllerHostname,
 	}
-	if err := bsm.SetupWithManager("customresourcedefinitionsource", mgr); err != nil {
+	if err := bsm.SetupWithManager("customresourcedefinitionsource", mgr, controllerNamespace); err != nil {
 		return fmt.Errorf("unable to create CustomResourceDefinitionSource controller: %w", err)
 	}
 
