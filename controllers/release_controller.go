@@ -42,6 +42,8 @@ type ReleaseController struct {
 	GVK schema.GroupVersionKind
 }
 
+//+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+
 //+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch
 
 //+kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update;patch
