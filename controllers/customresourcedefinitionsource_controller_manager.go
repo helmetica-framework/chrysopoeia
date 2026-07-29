@@ -49,8 +49,8 @@ type CustomResourceDefinitionSourceManager struct {
 	ImageReflectorControllerHostname string
 }
 
-//+kubebuilder:rbac:groups=chrysopoeia.io,resources=customresourcedefinitionsources,verbs=get;list;watch
-//+kubebuilder:rbac:groups=chrysopoeia.io,resources=customresourcedefinitionsources/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=helmetica.io,resources=customresourcedefinitionsources,verbs=get;list;watch
+//+kubebuilder:rbac:groups=helmetica.io,resources=customresourcedefinitionsources/status,verbs=get;update;patch
 
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch;create;update;patch
 
