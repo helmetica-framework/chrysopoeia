@@ -232,6 +232,15 @@ func runController(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("unable to create CustomResourceDefinitionSource controller: %w", err)
 	}
 
+	ram := &controllers.RBACAggregatorManager{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder("rbac-aggregator-manager"),
+	}
+	if err := ram.SetupWithManager("rbac-aggregator-manager", mgr); err != nil {
+		return fmt.Errorf("unable to create RBACAggregatorManager controller: %w", err)
+	}
+
 	imm := &controllers.DynamicReconcilerManager{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),

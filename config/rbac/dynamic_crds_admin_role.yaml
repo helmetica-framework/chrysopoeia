@@ -1,0 +1,6 @@
+---
+# This role is managed by the RBAC Aggregator Manager controller. It is used to grant the permissions of the dynamic CRDs created by the Chrysopoeia controller.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dynamic-crds-admin

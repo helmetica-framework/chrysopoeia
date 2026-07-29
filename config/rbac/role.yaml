@@ -68,6 +68,18 @@ rules:
   - list
   - watch
 - apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  verbs:
+  - create
+  - escalate
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - source.toolkit.fluxcd.io
   resources:
   - ocirepositories
