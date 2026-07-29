@@ -40,7 +40,7 @@ func (r *RBACAggregatorManager) Reconcile(ctx context.Context, _ reconcile.Reque
 	viewRules := make([]*rbacv1ac.PolicyRuleApplyConfiguration, len(crds.Items))
 	for i, crd := range crds.Items {
 		resource := crd.Spec.Names.Plural
-		statusSubresource := strings.Join([]string{resource, "status"}, ".")
+		statusSubresource := strings.Join([]string{resource, "status"}, "/")
 		adminRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(resource, statusSubresource).WithVerbs("*")
 		editRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(resource, statusSubresource).WithVerbs("create", "update", "patch", "delete")
 		viewRules[i] = rbacv1ac.PolicyRule().WithAPIGroups(crd.Spec.Group).WithResources(resource, statusSubresource).WithVerbs("get", "list", "watch")
