@@ -41,10 +41,10 @@ type RevisionManager struct {
 	GVK schema.GroupVersionKind
 }
 
-//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions/status,verbs=get;update;patch
 
-//+kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;create;update;patch;delete
 
 func NewRevisionManager() DynamicReconciler {
 	return &RevisionManager{}

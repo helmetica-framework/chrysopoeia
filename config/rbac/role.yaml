@@ -74,6 +74,7 @@ rules:
   - instancerevisions
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
@@ -117,6 +118,7 @@ rules:
   - ocirepositories
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
