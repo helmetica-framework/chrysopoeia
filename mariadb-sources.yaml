@@ -61,6 +61,20 @@ spec:
   crdNames:
     kind: MariaDBOperator
     plural: mariadboperators
+  # TODO manages? or force operator charts to bring their CRDs, which would make testing harder
+  provides:
+  - name: backups.k8s.mariadb.com
+  - name: connections.k8s.mariadb.com
+  - name: databases.k8s.mariadb.com
+  - name: externalmariadbs.k8s.mariadb.com
+  - name: grants.k8s.mariadb.com
+  - name: mariadbs.k8s.mariadb.com
+  - name: maxscales.k8s.mariadb.com
+  - name: physicalbackups.k8s.mariadb.com
+  - name: pointintimerecoveries.k8s.mariadb.com
+  - name: restores.k8s.mariadb.com
+  - name: sqljobs.k8s.mariadb.com
+  - name: users.k8s.mariadb.com
   reference:
     apiVersion: source.toolkit.fluxcd.io/v1
     kind: OCIRepository

@@ -16,6 +16,8 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/spf13/cobra"
 	"go.uber.org/multierr"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -205,6 +207,16 @@ func runController(cmd *cobra.Command, _ []string) error {
 					},
 					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
 				},
+				&rbacv1.RoleBinding{}: {
+					Namespaces: map[string]cache.Config{
+						cache.AllNamespaces: {},
+					},
+				},
+				&corev1.ServiceAccount{}: {
+					Namespaces: map[string]cache.Config{
+						cache.AllNamespaces: {},
+					},
+				},
 			},
 		},
 
@@ -239,6 +251,15 @@ func runController(cmd *cobra.Command, _ []string) error {
 	}
 	if err := ram.SetupWithManager("rbac-aggregator-manager", mgr); err != nil {
 		return fmt.Errorf("unable to create RBACAggregatorManager controller: %w", err)
+	}
+
+	drm := &controllers.DependencyRBACManager{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder("dependency-rbac-manager"),
+	}
+	if err := drm.SetupWithManager("dependency-rbac-manager", mgr); err != nil {
+		return fmt.Errorf("unable to create DependencyRBACManager controller: %w", err)
 	}
 
 	imm := &controllers.DynamicReconcilerManager{
