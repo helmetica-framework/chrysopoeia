@@ -48,7 +48,7 @@ type ReleaseController struct {
 
 //+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch
 
-//+kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update;patch;create
 
 func NewReleaseController() DynamicReconciler {
 	return &ReleaseController{}

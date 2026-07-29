@@ -49,6 +49,7 @@ rules:
   resources:
   - helmreleases
   verbs:
+  - create
   - get
   - list
   - patch
