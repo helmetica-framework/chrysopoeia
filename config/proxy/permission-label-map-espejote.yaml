@@ -53,7 +53,7 @@ spec:
         operator: "Exists"
     rules:
     - apiGroups:
-      - ""
+      - '*'
       apiVersions:
       - '*'
       operations:
