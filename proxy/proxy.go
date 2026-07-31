@@ -82,47 +82,37 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 
 	return &httputil.ReverseProxy{
 		Transport: &internalErrorRoundtripper{parent: upstreamTransport},
-		Rewrite: func(r *httputil.ProxyRequest) {
-			r.Out.Header.Del(internalErrorHeader)
+		Rewrite: rewriteErrorWrapper(internalErrorHeader, func(r *httputil.ProxyRequest) error {
 			r.SetXForwarded()
 			r.SetURL(upstreamURL)
 
 			requestInfo, err := decodeRequestInfo(r.In)
 			if err != nil {
-				log.Printf("Failed to get request info: %v", err)
-				return
+				return fmt.Errorf("failed to decode request info: %w", err)
 			}
 
 			if !requestNeedsRewrite(requestInfo) {
-				return
+				return nil
 			}
 
 			userInfo, err := extractUserInfoFromAuthHeader(r.In.Context(), authenticationClient, r.In.Header.Get("Authorization"))
 			if err != nil {
-				log.Printf("Failed to extract user info from bearer token: %v", err)
-				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to extract user info from bearer token: %v", err))
-				return
+				return fmt.Errorf("failed to extract user info from bearer token: %w", err)
 			}
 
 			scopeLabel, err := new(scopeExtractor{coreClient: coreClient}).getScopeLabel(r.In.Header, userInfo.Username)
 			if err != nil {
-				log.Printf("Failed to get scope label: %v", err)
-				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to get scope label: %v", err))
-				return
+				return fmt.Errorf("failed to get scope label: %w", err)
 			}
 
 			log.Printf("Rewriting request. Scope: %q, RequestInfo: %+v, UserInfo: %+v", scopeLabel, requestInfo, userInfo)
 
 			allowed, reason, err := checkCustomVerbAccess(r.In.Context(), authorizationClient, requestInfo, userInfo, scopeLabel)
 			if err != nil {
-				log.Printf("Failed to check custom verb access: %v", err)
-				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to check custom verb access: %v", err))
-				return
+				return fmt.Errorf("failed to check custom verb access: %w", err)
 			}
 			if !allowed {
-				log.Printf("User %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, scopeLabel, reason)
-				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("User %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, scopeLabel, reason))
-				return
+				return fmt.Errorf("user %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, scopeLabel, reason)
 			}
 
 			// Use our authentication that has cluster scoped list/watch.
@@ -132,9 +122,7 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 			// Note we authenticate the label but it's somewhat easy to misconfigure and allow any label.
 			req, err := labels.NewRequirement(scopeLabel, selection.Exists, nil)
 			if err != nil {
-				log.Printf("Failed to create label requirement: %v", err)
-				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to create label requirement: %v", err))
-				return
+				return fmt.Errorf("failed to create label requirement: %w", err)
 			}
 			ls := req.String()
 
@@ -144,7 +132,9 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 			}
 			q.Set("labelSelector", ls)
 			r.Out.URL.RawQuery = q.Encode()
-		},
+
+			return nil
+		}),
 
 		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, err error) {
 			rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -159,8 +149,7 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 
 			requestInfo, err := decodeRequestInfo(res.Request)
 			if err != nil {
-				log.Printf("Failed to get request info: %v", err)
-				return err
+				return fmt.Errorf("failed to get request info: %w", err)
 			}
 
 			if requestInfo.Verb != "create" ||
@@ -174,7 +163,6 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 
 			userInfo, err := extractUserInfoFromAuthHeader(res.Request.Context(), authenticationClient, res.Request.Header.Get("Authorization"))
 			if err != nil {
-				log.Printf("Failed to extract user info from bearer token: %v", err)
 				return fmt.Errorf("failed to extract user info from request header: %w", err)
 			}
 
@@ -204,7 +192,6 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 
 					allowed, reason, err := checkCustomVerbAccess(res.Request.Context(), authorizationClient, requestInfo, userInfo, scopeLabel)
 					if err != nil {
-						log.Printf("Failed to check custom verb access: %v", err)
 						return fmt.Errorf("failed to check custom verb access: %w", err)
 					}
 					obj.Status.Allowed = allowed
@@ -386,4 +373,16 @@ func (se *scopeExtractor) getScopeLabel(header http.Header, username string) (st
 		return "", fmt.Errorf("failed to determine injected label for user %q, either set the %q header or annotate the service account with %q", username, ScopeHeader, ScopeAnnotation)
 	}
 	return injectedLabel, nil
+}
+
+// rewriteErrorWrapper wraps a function that modifies a ProxyRequest sets the error header if the function returns an error.
+// This is a workaround for the fact that the ReverseProxy does not have a way to return an error from the Rewrite function.
+// Must be paired with the internalErrorRoundtripper to work correctly.
+func rewriteErrorWrapper(errorHeader string, f func(*httputil.ProxyRequest) error) func(r *httputil.ProxyRequest) {
+	return func(r *httputil.ProxyRequest) {
+		r.Out.Header.Del(errorHeader)
+		if err := f(r); err != nil {
+			r.Out.Header.Set(errorHeader, err.Error())
+		}
+	}
 }
