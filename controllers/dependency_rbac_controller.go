@@ -79,6 +79,8 @@ func (r *DependencyRBACManager) Reconcile(ctx context.Context, req reconcile.Req
 				)
 			}
 
+			// TODO: After implementing the harness: More fine grained permissions than cluster-admin
+			// It's a role binding not a cluster role binding, so the permissions are limited to the namespace of the provider, still not ideal.
 			prb := rbacv1ac.
 				RoleBinding(strings.Join([]string{"chrysopoeia", "provider", provider.Name, req}, ":"), ns.Name).
 				WithLabels(map[string]string{
@@ -88,7 +90,7 @@ func (r *DependencyRBACManager) Reconcile(ctx context.Context, req reconcile.Req
 					rbacv1ac.RoleRef().
 						WithAPIGroup("rbac.authorization.k8s.io").
 						WithKind("ClusterRole").
-						WithName("admin"),
+						WithName("cluster-admin"),
 				).
 				WithSubjects(subjects...)
 

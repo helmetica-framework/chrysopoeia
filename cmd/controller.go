@@ -245,15 +245,6 @@ func runController(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("unable to create RBACAggregatorManager controller: %w", err)
 	}
 
-	pram := &controllers.ProvidesRBACAggregatorManager{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder("provides-rbac-aggregator-manager"),
-	}
-	if err := pram.SetupWithManager("provides-rbac-aggregator-manager", mgr); err != nil {
-		return fmt.Errorf("unable to create ProvidesRBACAggregatorManager controller: %w", err)
-	}
-
 	drm := &controllers.DependencyRBACManager{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
