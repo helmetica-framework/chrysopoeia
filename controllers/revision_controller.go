@@ -52,38 +52,38 @@ func NewRevisionManager() DynamicReconciler {
 
 func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("RevisionManager.Reconcile").WithValues("request", req)
-	l.Info("Reconciling Instance")
+	l.Info("Reconciling Claim")
 
-	var instance unstructured.Unstructured
-	instance.SetAPIVersion(r.GVK.GroupVersion().String())
-	instance.SetKind(r.GVK.Kind)
-	if err := r.Get(ctx, req.NamespacedName, &instance); err != nil {
+	var claim unstructured.Unstructured
+	claim.SetAPIVersion(r.GVK.GroupVersion().String())
+	claim.SetKind(r.GVK.Kind)
+	if err := r.Get(ctx, req.NamespacedName, &claim); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
-	if !instance.GetDeletionTimestamp().IsZero() {
+	if !claim.GetDeletionTimestamp().IsZero() {
 		return ctrl.Result{}, nil
 	}
 
-	ociUrl, _, err := unstructured.NestedString(instance.Object, "spec", "ociUrl")
+	ociUrl, _, err := unstructured.NestedString(claim.Object, "spec", "ociUrl")
 	if err != nil {
 		l.Error(err, "Failed to get ociUrl from instance")
 		return ctrl.Result{}, err
 	}
-	version, _, err := unstructured.NestedString(instance.Object, "spec", "version")
+	version, _, err := unstructured.NestedString(claim.Object, "spec", "version")
 	if err != nil {
 		l.Error(err, "Failed to get version from instance")
 		return ctrl.Result{}, err
 	}
-	values, _, err := unstructured.NestedMap(instance.Object, "spec", "values")
+	values, _, err := unstructured.NestedMap(claim.Object, "spec", "values")
 	if err != nil {
 		l.Error(err, "Failed to get values from instance")
 		return ctrl.Result{}, err
 	}
 
-	ociRepo, err := r.ensureOCIRepository(ctx, instance, ociUrl, version)
+	ociRepo, err := r.ensureOCIRepository(ctx, claim, ociUrl, version)
 	if err != nil {
 		l.Error(err, "Failed to ensure OCIRepository")
 		return ctrl.Result{}, err
@@ -110,17 +110,17 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 		return ctrl.Result{}, err
 	}
 
-	revName := strings.Join([]string{instance.GetName(), fmt.Sprintf("%x", shaSum.Sum(nil))}, "-")
+	revName := strings.Join([]string{claim.GetName(), fmt.Sprintf("%x", shaSum.Sum(nil))}, "-")
 	rev := chrysopoeiav1ac.
 		InstanceRevision(
 			revName,
-			instance.GetNamespace()).
+			claim.GetNamespace()).
 		WithOwnerReferences(
 			metav1ac.OwnerReference().
-				WithAPIVersion(instance.GetAPIVersion()).
-				WithKind(instance.GetKind()).
-				WithName(instance.GetName()).
-				WithUID(instance.GetUID()).
+				WithAPIVersion(claim.GetAPIVersion()).
+				WithKind(claim.GetKind()).
+				WithName(claim.GetName()).
+				WithUID(claim.GetUID()).
 				WithController(true)).
 		WithSpec(
 			chrysopoeiav1ac.
@@ -143,15 +143,15 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 		return ctrl.Result{}, err
 	}
 
-	revField, _, err := unstructured.NestedString(instance.Object, "status", "latestRevision")
+	revField, _, err := unstructured.NestedString(claim.Object, "status", "latestRevision")
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get latestRevision from instance status: %w", err)
 	}
 	if revField != revName {
-		if err := unstructured.SetNestedField(instance.Object, revName, "status", "latestRevision"); err != nil {
+		if err := unstructured.SetNestedField(claim.Object, revName, "status", "latestRevision"); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set latestRevision in instance status: %w", err)
 		}
-		if err := r.Status().Update(ctx, &instance); err != nil {
+		if err := r.Status().Update(ctx, &claim); err != nil {
 			l.Error(err, "Failed to update instance status")
 			return ctrl.Result{}, err
 		}

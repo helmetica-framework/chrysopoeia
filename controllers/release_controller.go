@@ -56,25 +56,25 @@ func NewReleaseController() DynamicReconciler {
 
 func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("ReleaseController.Reconcile").WithValues("request", req)
-	l.Info("Reconciling Instance")
+	l.Info("Reconciling Claim")
 
 	instanceNSName := r.instanceNamespaceName(req.NamespacedName)
 
-	var instance unstructured.Unstructured
-	instance.SetAPIVersion(r.GVK.GroupVersion().String())
-	instance.SetKind(r.GVK.Kind)
-	if err := r.Get(ctx, req.NamespacedName, &instance); err != nil {
+	var claim unstructured.Unstructured
+	claim.SetAPIVersion(r.GVK.GroupVersion().String())
+	claim.SetKind(r.GVK.Kind)
+	if err := r.Get(ctx, req.NamespacedName, &claim); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, r.cleanupRelease(ctx, instanceNSName)
 		}
 		return ctrl.Result{}, err
 	}
-	if !instance.GetDeletionTimestamp().IsZero() {
+	if !claim.GetDeletionTimestamp().IsZero() {
 		return ctrl.Result{}, nil
 	}
 
 	var revisions chrysopoeiav1.InstanceRevisionList
-	if err := r.List(ctx, &revisions, client.InNamespace(req.Namespace), client.MatchingFields{ownerUIDField: string(instance.GetUID())}); err != nil {
+	if err := r.List(ctx, &revisions, client.InNamespace(req.Namespace), client.MatchingFields{ownerUIDField: string(claim.GetUID())}); err != nil {
 		return ctrl.Result{}, err
 	}
 	sortByApprovalNewestFirst(revisions.Items)
@@ -90,12 +90,12 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 		return ctrl.Result{}, fmt.Errorf("invalid version format: %s", revision.Spec.Version)
 	}
 
-	if err := r.ensureRelease(ctx, instance, instanceNSName, digest, revision); err != nil {
+	if err := r.ensureRelease(ctx, claim, instanceNSName, digest, revision); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	var release helmv2.HelmRelease
-	if err := r.Get(ctx, client.ObjectKey{Namespace: instanceNSName, Name: instance.GetName()}, &release); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: instanceNSName, Name: claim.GetName()}, &release); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -123,9 +123,9 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	drifted := apimeta.IsStatusConditionTrue(release.Status.Conditions, helmv2.DriftedCondition)
 
 	statusPatch := &unstructured.Unstructured{}
-	statusPatch.SetGroupVersionKind(instance.GroupVersionKind())
-	statusPatch.SetName(instance.GetName())
-	statusPatch.SetNamespace(instance.GetNamespace())
+	statusPatch.SetGroupVersionKind(claim.GroupVersionKind())
+	statusPatch.SetName(claim.GetName())
+	statusPatch.SetNamespace(claim.GetNamespace())
 	if err := errors.Join(
 		unstructured.SetNestedField(statusPatch.Object, status, "status", "releaseStatus"),
 		unstructured.SetNestedField(statusPatch.Object, revision.GetName(), "status", "appliedRevision"),

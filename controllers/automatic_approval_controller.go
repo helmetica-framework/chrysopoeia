@@ -41,31 +41,31 @@ func NewAutomaticApprovalManager() DynamicReconciler {
 
 func (r *AutomaticApprovalManager) Reconcile(ctx context.Context, req reconcile.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("AutomaticApprovalManager.Reconcile").WithValues("request", req)
-	l.Info("Reconciling Instance")
+	l.Info("Reconciling Claim")
 
-	var instance unstructured.Unstructured
-	instance.SetAPIVersion(r.GVK.GroupVersion().String())
-	instance.SetKind(r.GVK.Kind)
-	if err := r.Get(ctx, req.NamespacedName, &instance); err != nil {
+	var claim unstructured.Unstructured
+	claim.SetAPIVersion(r.GVK.GroupVersion().String())
+	claim.SetKind(r.GVK.Kind)
+	if err := r.Get(ctx, req.NamespacedName, &claim); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
-	if !instance.GetDeletionTimestamp().IsZero() {
+	if !claim.GetDeletionTimestamp().IsZero() {
 		return ctrl.Result{}, nil
 	}
 
-	if instance.Object["spec"] == nil {
+	if claim.Object["spec"] == nil {
 		l.Info("Instance does not have a spec, skipping automatic approval")
 		return ctrl.Result{}, nil
 	}
-	if strategy, _, _ := unstructured.NestedString(instance.Object, "spec", "approval", "strategy"); strategy != "Automatic" {
+	if strategy, _, _ := unstructured.NestedString(claim.Object, "spec", "approval", "strategy"); strategy != "Automatic" {
 		l.Info("Instance does not have automatic approval strategy, skipping")
 		return ctrl.Result{}, nil
 	}
 
-	wantedRevisionName, _, _ := unstructured.NestedString(instance.Object, "status", "latestRevision")
+	wantedRevisionName, _, _ := unstructured.NestedString(claim.Object, "status", "latestRevision")
 	if wantedRevisionName == "" {
 		l.Info("Instance does not have a latest revision, skipping automatic approval")
 		return ctrl.Result{}, nil
@@ -76,7 +76,7 @@ func (r *AutomaticApprovalManager) Reconcile(ctx context.Context, req reconcile.
 	}
 
 	var revisions chrysopoeiav1.InstanceRevisionList
-	if err := r.List(ctx, &revisions, client.InNamespace(req.Namespace), client.MatchingFields{ownerUIDField: string(instance.GetUID())}); err != nil {
+	if err := r.List(ctx, &revisions, client.InNamespace(req.Namespace), client.MatchingFields{ownerUIDField: string(claim.GetUID())}); err != nil {
 		return ctrl.Result{}, err
 	}
 	sortByApprovalNewestFirst(revisions.Items)
