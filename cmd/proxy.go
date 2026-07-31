@@ -27,8 +27,6 @@ func init() {
 	proxyCmd.Flags().String("cert-path", "", "The directory that contains the webhook certificate.")
 	proxyCmd.Flags().String("cert-name", "tls.crt", "The name of the webhook certificate file.")
 	proxyCmd.Flags().String("cert-key", "tls.key", "The name of the webhook key file.")
-
-	proxyCmd.Flags().String("injected-label", "reserved.chrysopoeia.io/non-matching", "The label that will be injected into the cluster scoped queries.")
 }
 
 var proxyCmd = &cobra.Command{
@@ -44,9 +42,8 @@ func runProxy(cmd *cobra.Command, _ []string) error {
 	proxyCertPath, pcperr := cmd.Flags().GetString("cert-path")
 	proxyCertName, pcnerr := cmd.Flags().GetString("cert-name")
 	proxyCertKey, pckerr := cmd.Flags().GetString("cert-key")
-	injectedLabel, ilerr := cmd.Flags().GetString("injected-label")
 
-	if err := multierr.Combine(secErr, addrErr, pcperr, pcnerr, pckerr, ilerr); err != nil {
+	if err := multierr.Combine(secErr, addrErr, pcperr, pcnerr, pckerr); err != nil {
 		return fmt.Errorf("failed to get flags: %w", err)
 	}
 
@@ -71,7 +68,7 @@ func runProxy(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	p, err := proxy.New(ctrl.GetConfigOrDie(), injectedLabel)
+	p, err := proxy.New(ctrl.GetConfigOrDie())
 	if err != nil {
 		return fmt.Errorf("failed to create proxy: %w", err)
 	}

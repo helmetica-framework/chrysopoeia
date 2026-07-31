@@ -18,23 +18,30 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/runtime/serializer/protobuf"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server"
+	"k8s.io/client-go/kubernetes"
 	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 )
 
+const ScopeHeader = "X-Chrysopoeia-Proxy-Scope"
+const ScopeAnnotation = "chrysopoeia.io/scope"
+
 const internalErrorHeader = "X-Chrysopoeia-Proxy-Error"
 const scopedListVerb = "scopedlist"
 
-func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, error) {
+func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 	flag.Parse()
 
 	scheme, decoder, err := newDecoder()
@@ -47,14 +54,14 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 		return nil, fmt.Errorf("impersonation is not supported for the upstream config")
 	}
 
-	upstreamAuthenticationClient, err := authenticationv1client.NewForConfig(upstreamRestConf)
+	kubeClient, err := kubernetes.NewForConfig(upstreamRestConf)
 	if err != nil {
 		return nil, err
 	}
-	upstreamAuthorizationClient, err := authorizationv1client.NewForConfig(upstreamRestConf)
-	if err != nil {
-		return nil, err
-	}
+
+	coreClient := kubeClient.CoreV1()
+	authenticationClient := kubeClient.AuthenticationV1()
+	authorizationClient := kubeClient.AuthorizationV1()
 
 	upstreamTransportConf, err := upstreamRestConf.TransportConfig()
 	if err != nil {
@@ -90,31 +97,47 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 				return
 			}
 
-			userInfo, err := extractUserInfoFromAuthHeader(r.In.Context(), upstreamAuthenticationClient, r.In.Header.Get("Authorization"))
+			userInfo, err := extractUserInfoFromAuthHeader(r.In.Context(), authenticationClient, r.In.Header.Get("Authorization"))
 			if err != nil {
 				log.Printf("Failed to extract user info from bearer token: %v", err)
 				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to extract user info from bearer token: %v", err))
 				return
 			}
 
-			log.Printf("Rewriting request. RequestInfo: %+v, UserInfo: %+v", requestInfo, userInfo)
+			scopeLabel, err := new(scopeExtractor{coreClient: coreClient}).getScopeLabel(r.In.Header, userInfo.Username)
+			if err != nil {
+				log.Printf("Failed to get scope label: %v", err)
+				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to get scope label: %v", err))
+				return
+			}
 
-			allowed, reason, err := checkCustomVerbAccess(r.In.Context(), upstreamAuthorizationClient, requestInfo, userInfo, injectedLabel)
+			log.Printf("Rewriting request. Scope: %q, RequestInfo: %+v, UserInfo: %+v", scopeLabel, requestInfo, userInfo)
+
+			allowed, reason, err := checkCustomVerbAccess(r.In.Context(), authorizationClient, requestInfo, userInfo, scopeLabel)
 			if err != nil {
 				log.Printf("Failed to check custom verb access: %v", err)
 				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to check custom verb access: %v", err))
 				return
 			}
 			if !allowed {
-				log.Printf("User %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, injectedLabel, reason)
-				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("User %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, injectedLabel, reason))
+				log.Printf("User %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, scopeLabel, reason)
+				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("User %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, scopeLabel, reason))
 				return
 			}
 
 			// Use our authentication that has cluster scoped list/watch.
 			r.Out.Header.Del("Authorization")
 
-			ls := injectedLabel
+			// Validates the label so users can't just list everything by setting the selector to something like `!notexists`.
+			// Note we authenticate the label but it's somewhat easy to misconfigure and allow any label.
+			req, err := labels.NewRequirement(scopeLabel, selection.Exists, nil)
+			if err != nil {
+				log.Printf("Failed to create label requirement: %v", err)
+				r.Out.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to create label requirement: %v", err))
+				return
+			}
+			ls := req.String()
+
 			q := r.Out.URL.Query()
 			if existing := q.Get("labelSelector"); existing != "" {
 				ls = strings.Join([]string{existing, ls}, ",")
@@ -149,7 +172,7 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 
 			log.Printf("Modifying SelfSubjectAccessReview response for request: %+v", requestInfo)
 
-			userInfo, err := extractUserInfoFromAuthHeader(res.Request.Context(), upstreamAuthenticationClient, res.Request.Header.Get("Authorization"))
+			userInfo, err := extractUserInfoFromAuthHeader(res.Request.Context(), authenticationClient, res.Request.Header.Get("Authorization"))
 			if err != nil {
 				log.Printf("Failed to extract user info from bearer token: %v", err)
 				return fmt.Errorf("failed to extract user info from request header: %w", err)
@@ -174,14 +197,19 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 					matchesListWatchVerb(obj.Spec.ResourceAttributes.Verb) {
 					log.Printf("Allowing cluster-scoped access through proxy for resource %s/%s with verb %s\n", obj.Spec.ResourceAttributes.Group, obj.Spec.ResourceAttributes.Resource, obj.Spec.ResourceAttributes.Verb)
 
-					allowed, reason, err := checkCustomVerbAccess(res.Request.Context(), upstreamAuthorizationClient, requestInfo, userInfo, injectedLabel)
+					scopeLabel, err := new(scopeExtractor{coreClient: coreClient}).getScopeLabel(res.Request.Header, userInfo.Username)
+					if err != nil {
+						return fmt.Errorf("failed to get scope label: %w", err)
+					}
+
+					allowed, reason, err := checkCustomVerbAccess(res.Request.Context(), authorizationClient, requestInfo, userInfo, scopeLabel)
 					if err != nil {
 						log.Printf("Failed to check custom verb access: %v", err)
 						return fmt.Errorf("failed to check custom verb access: %w", err)
 					}
 					obj.Status.Allowed = allowed
 					obj.Status.Denied = !allowed
-					obj.Status.Reason = fmt.Sprintf("Access managed through helmetica.io proxy for cluster-scoped resources: %s (Upstream reason: %s)", reason, obj.Status.Reason)
+					obj.Status.Reason = fmt.Sprintf("Access managed through chrysopoeia.io proxy for cluster-scoped resources: %s (Upstream reason: %s)", reason, obj.Status.Reason)
 				}
 				decodedObj = obj
 			default:
@@ -328,4 +356,34 @@ func requestNeedsRewrite(requestInfo request.RequestInfo) bool {
 
 func matchesListWatchVerb(verb string) bool {
 	return slices.ContainsFunc([]string{"list", "watch"}, func(v string) bool { return strings.EqualFold(v, verb) })
+}
+
+type scopeExtractor struct {
+	coreClient corev1client.CoreV1Interface
+}
+
+// getScopeLabel extracts the scope label from the request header or from the service account annotation if the user is a service account.
+func (se *scopeExtractor) getScopeLabel(header http.Header, username string) (string, error) {
+	var injectedLabel string
+	// Since we authenticate the user and check their access to the injected label,
+	// we can trust the header.
+	if lbl := header.Get(ScopeHeader); lbl != "" {
+		injectedLabel = lbl
+	} else if strings.HasPrefix(username, "system:serviceaccount:") {
+		// If the user is a service account, we can get the scope from an annotation on the service account. This is a fallback for when the request doesn't have the scope header.
+		ns, name, ok := strings.Cut(strings.TrimPrefix(username, "system:serviceaccount:"), ":")
+		if !ok {
+			return "", fmt.Errorf("failed to parse service account username, missing ':' in %q", username)
+		}
+		sa, err := se.coreClient.ServiceAccounts(ns).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return "", fmt.Errorf("failed to get service account %s/%s: %v", ns, name, err)
+		}
+		injectedLabel = sa.Annotations[ScopeAnnotation]
+	}
+
+	if injectedLabel == "" {
+		return "", fmt.Errorf("failed to determine injected label for user %q, either set the %q header or annotate the service account with %q", username, ScopeHeader, ScopeAnnotation)
+	}
+	return injectedLabel, nil
 }
