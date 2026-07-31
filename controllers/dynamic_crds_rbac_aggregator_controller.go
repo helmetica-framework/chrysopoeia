@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-type RBACAggregatorManager struct {
+type DynamicCRDsRBACAggregatorManager struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
@@ -25,8 +25,8 @@ type RBACAggregatorManager struct {
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get;list;watch;create;update;patch
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=escalate
 
-func (r *RBACAggregatorManager) Reconcile(ctx context.Context, _ reconcile.Request) (res ctrl.Result, err error) {
-	l := log.FromContext(ctx).WithName("RBACAggregatorManager.Reconcile")
+func (r *DynamicCRDsRBACAggregatorManager) Reconcile(ctx context.Context, _ reconcile.Request) (res ctrl.Result, err error) {
+	l := log.FromContext(ctx).WithName("DynamicCRDsRBACAggregatorManager.Reconcile")
 	l.Info("Reconciling")
 
 	// Cache is already filtered to only include CRDs that have the label "chrysopoeia.io/managed"
@@ -84,7 +84,7 @@ func (r *RBACAggregatorManager) Reconcile(ctx context.Context, _ reconcile.Reque
 	return ctrl.Result{}, nil
 }
 
-func (r *RBACAggregatorManager) SetupWithManager(name string, mgr ctrl.Manager) error {
+func (r *DynamicCRDsRBACAggregatorManager) SetupWithManager(name string, mgr ctrl.Manager) error {
 	// Cache is already filtered to only include CRDs that have the label "chrysopoeia.io/managed"
 	return builder.ControllerManagedBy(mgr).
 		For(&apiextv1.CustomResourceDefinition{}).
