@@ -117,19 +117,20 @@ func (r *DependencyRBACManager) SetupWithManager(name string, mgr ctrl.Manager) 
 func (r *DependencyRBACManager) ensureProviderRoles(ctx context.Context, providerNamespace corev1.Namespace, provides []string) error {
 	roleName := strings.Join([]string{"chrysopoeia", "provider", "scopedlist", providerNamespace.Name}, ":")
 
-	resourceNames := make([]string, len(provides))
-	for i, p := range provides {
-		resourceNames[i] = RequiresLabelPrefix + p
-	}
-	slcr := rbacv1ac.
-		ClusterRole(roleName).
-		WithRules(
+	slcr := rbacv1ac.ClusterRole(roleName)
+	if len(provides) > 0 {
+		resourceNames := make([]string, len(provides))
+		for i, p := range provides {
+			resourceNames[i] = RequiresLabelPrefix + p
+		}
+		slcr = slcr.WithRules(
 			rbacv1ac.PolicyRule().
 				WithAPIGroups("*").
 				WithResources("*").
 				WithVerbs("scopedlist").
 				WithResourceNames(resourceNames...),
 		)
+	}
 
 	var saList corev1.ServiceAccountList
 	if err := r.List(ctx, &saList, client.InNamespace(providerNamespace.Name)); err != nil {
