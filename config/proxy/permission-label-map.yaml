@@ -14,8 +14,9 @@ spec:
     resourceRules:
     - apiGroups:   ["*"]
       apiVersions: ["*"]
-      operations:  ["CREATE"]
+      operations:  ["CREATE", "UPDATE"]
       resources:   ["*"]
+      scope: "Namespaced"
     namespaceSelector:
       matchExpressions:
       - key: "chrysopoeia.io/instance"

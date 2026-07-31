@@ -1,0 +1,62 @@
+apiVersion: espejote.io/v1alpha1
+kind: ClusterAdmission
+metadata:
+  name: "chrysopoeia-instances-namespaced-requires-labels"
+  annotations:
+    description: |
+      This policy ensures that all resources created in namespaces with the label "chrysopoeia.io/instance"
+      have the dependency labels starting with "requires.helmetica.io/".
+      It copies the labels from the namespace to the resource being created.
+
+      This allows the chrysopoeia proxy to filter access for operators that require cluster scoped access.
+spec:
+  mutating: true
+  template: |
+    local esp = import 'espejote.libsonnet';
+    local admission = esp.ALPHA.admission;
+
+    local nsObj = admission.namespaceObject();
+    local obj = admission.admissionRequest().object;
+
+    local jsonpatchEscapeKey = function(key)
+      std.strReplace(std.strReplace(key, '~', '~0'), '/', '~1');
+
+    local nsLabels = std.get(nsObj.metadata, 'labels', {});
+    local objLabels = std.get(obj.metadata, 'labels', {});
+
+    local labelsToAdd = std.filterMap(
+      function(l) std.startsWith(l, 'requires.helmetica.io/') && !std.objectHas(objLabels, l),
+      function(l) admission.jsonPatchOp(
+        'add',
+        '/metadata/labels/' + jsonpatchEscapeKey(l),
+        '',
+      ),
+      std.objectFields(nsLabels)
+    );
+
+    if std.length(labelsToAdd) == 0 then
+      admission.allowed('no labels to add')
+    else
+      local patch =
+        if !std.objectHas(obj.metadata, 'labels') then
+          [admission.jsonPatchOp('add', '/metadata/labels', {})] + labelsToAdd
+        else
+          labelsToAdd;
+      admission.patched('labels added', admission.assertPatch(patch))
+  webhookConfiguration:
+    failurePolicy: Fail
+    namespaceSelector:
+      matchExpressions:
+      - key: "chrysopoeia.io/instance"
+        operator: "Exists"
+    rules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - '*'
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - '*'
+      scope: Namespaced
