@@ -224,10 +224,15 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 
+	namespaceLabels, err := r.appuioNamespaceLabels(ctx, instance)
+	if err != nil {
+		return fmt.Errorf("failed to get APPUiO namespace labels: %w", err)
+	}
+	maps.Copy(namespaceLabels, commonLabels)
 	if err := r.Apply(ctx,
 		corev1ac.Namespace(helmNSName).
 			WithAnnotations(commonAnnotations).
-			WithLabels(commonLabels),
+			WithLabels(namespaceLabels),
 		ownerOpt); err != nil {
 		return err
 	}
@@ -335,6 +340,26 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 	return nil
+}
+
+// appuioNamespaceLabels returns a map of labels that are required on the APPUiO platform for its multi-tenant feautures.
+// TODO: This might be done more generically eg. with CEL but whatever, sometimes the simplest solution is the best.
+func (r *ReleaseController) appuioNamespaceLabels(ctx context.Context, claim unstructured.Unstructured) (map[string]string, error) {
+	labels := map[string]string{
+		"appuio.io/unmanaged-namespace": "",
+	}
+
+	var claimNS corev1.Namespace
+	if err := r.Get(ctx, types.NamespacedName{Name: claim.GetNamespace()}, &claimNS); err != nil {
+		return nil, fmt.Errorf("failed to get namespace for claim %s: %w", claim.GetNamespace(), err)
+	}
+
+	const orgLabel = "appuio.io/organization"
+	if org := claimNS.Labels[orgLabel]; org != "" {
+		labels[orgLabel] = org
+	}
+
+	return labels, nil
 }
 
 func (r *ReleaseController) ControllerName() string {
