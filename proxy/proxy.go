@@ -152,7 +152,6 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 			userInfo, err := extractUserInfoFromAuthHeader(res.Request.Context(), upstreamAuthenticationClient, res.Request.Header.Get("Authorization"))
 			if err != nil {
 				log.Printf("Failed to extract user info from bearer token: %v", err)
-				res.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to extract user info from bearer token: %v", err))
 				return fmt.Errorf("failed to extract user info from request header: %w", err)
 			}
 
@@ -178,7 +177,6 @@ func New(upstreamRestConf *rest.Config, injectedLabel string) (http.Handler, err
 					allowed, reason, err := checkCustomVerbAccess(res.Request.Context(), upstreamAuthorizationClient, requestInfo, userInfo, injectedLabel)
 					if err != nil {
 						log.Printf("Failed to check custom verb access: %v", err)
-						res.Header.Set(internalErrorHeader, fmt.Sprintf("Failed to check custom verb access: %v", err))
 						return fmt.Errorf("failed to check custom verb access: %w", err)
 					}
 					obj.Status.Allowed = allowed
