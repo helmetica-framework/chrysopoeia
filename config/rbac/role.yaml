@@ -97,7 +97,6 @@ rules:
   resources:
   - clusterrolebindings
   - rolebindings
-  - roles
   verbs:
   - create
   - get
@@ -109,6 +108,7 @@ rules:
   - rbac.authorization.k8s.io
   resources:
   - clusterroles
+  - roles
   verbs:
   - bind
   - create

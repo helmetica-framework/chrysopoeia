@@ -28,7 +28,7 @@ const RequiresLabelPrefix = "requires.helmetica.io/"
 const ProvidesLabelPrefix = "provides.helmetica.io/"
 const dependencyRBACManagerName = "chrysopoeia-dependency-rbac-manager"
 
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind;escalate
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;roles,verbs=bind;escalate
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings;rolebindings,verbs=get;list;watch;create;update;patch
 //+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
