@@ -263,6 +263,45 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 
+	rbacRequires := make([]*rbacv1ac.PolicyRuleApplyConfiguration, 0, len(requires))
+	for _, r := range requires {
+		resource, group, found := strings.Cut(r, ".")
+		if !found {
+			return fmt.Errorf("invalid requires format: %s", r)
+		}
+		rbacRequires = append(rbacRequires, rbacv1ac.PolicyRule().
+			WithAPIGroups(group).
+			WithResources(resource).
+			WithVerbs("*"),
+		)
+	}
+	requiresRoleName := strings.Join([]string{"chrysopoeia", "requires"}, ":")
+	requiresRole := rbacv1ac.
+		Role("chrysopoeia:requires", helmNSName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
+		WithRules(rbacRequires...)
+	if err := r.Apply(ctx, requiresRole, ownerOpt); err != nil {
+		return err
+	}
+	requiresRoleBinding := rbacv1ac.RoleBinding("chrysopoeia:requires-instance-admin", helmNSName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
+		WithRoleRef(
+			rbacv1ac.RoleRef().
+				WithAPIGroup("rbac.authorization.k8s.io").
+				WithKind("Role").
+				WithName(requiresRoleName),
+		).WithSubjects(
+		rbacv1ac.Subject().
+			WithKind("ServiceAccount").
+			WithName(saName).
+			WithNamespace(helmNSName),
+	)
+	if err := r.Apply(ctx, requiresRoleBinding, ownerOpt); err != nil {
+		return err
+	}
+
 	artifact := &sourcev1.OCIRepository{}
 	artifact.SetGroupVersionKind(sourcev1.GroupVersion.WithKind("OCIRepository"))
 	artifact.SetNamespace(helmNSName)
