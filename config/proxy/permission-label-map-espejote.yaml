@@ -4,6 +4,8 @@ metadata:
   name: "chrysopoeia-instances-namespaced-requires-labels"
   annotations:
     description: |
+      If your cluster is Kubernetes 1.36 or later, you should use the MutatingAdmissionPolicy and MutatingAdmissionPolicyBinding resources instead of this ClusterAdmission resource.
+
       This policy ensures that all resources created in namespaces with the label "chrysopoeia.io/instance"
       have the dependency labels starting with "requires.helmetica.io/".
       It copies the labels from the namespace to the resource being created.
