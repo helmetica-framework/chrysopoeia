@@ -230,6 +230,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	}
 	maps.Copy(namespaceLabels, commonLabels)
 	namespaceLabels["chrysopoeia.io/managed"] = ""
+	namespaceLabels["chrysopoeia.io/instance"] = ""
 	if err := r.Apply(ctx,
 		corev1ac.Namespace(helmNSName).
 			WithAnnotations(commonAnnotations).
