@@ -229,6 +229,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return fmt.Errorf("failed to get APPUiO namespace labels: %w", err)
 	}
 	maps.Copy(namespaceLabels, commonLabels)
+	namespaceLabels["chrysopoeia.io/managed"] = ""
 	if err := r.Apply(ctx,
 		corev1ac.Namespace(helmNSName).
 			WithAnnotations(commonAnnotations).
