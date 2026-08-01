@@ -33,7 +33,6 @@ spec:
         - proxy
         - --addr=:8443
         - --cert-path=/tmp/proxy-serving-certs
-        - --injected-label=requires.helmetica.io/mariadbs.k8s.mariadb.com
         env:
         - name: POD_NAMESPACE
           valueFrom:
