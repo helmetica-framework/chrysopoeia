@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -68,7 +69,10 @@ func runProxy(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	p, err := proxy.New(ctrl.GetConfigOrDie())
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+
+	p, err := proxy.New(ctx, ctrl.GetConfigOrDie())
 	if err != nil {
 		return fmt.Errorf("failed to create proxy: %w", err)
 	}

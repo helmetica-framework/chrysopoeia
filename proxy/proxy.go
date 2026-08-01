@@ -14,10 +14,13 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -30,8 +33,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/transport"
 )
 
@@ -41,7 +44,10 @@ const ScopeAnnotation = "proxy.chrysopoeia.io/scope"
 const internalErrorHeader = "X-Chrysopoeia-Proxy-Error"
 const scopedListVerb = "scopedlist"
 
-func New(upstreamRestConf *rest.Config) (http.Handler, error) {
+// New creates a new HTTP handler that proxies requests to the upstream Kubernetes API server,
+// rewriting requests and responses as necessary to enforce access control based on the scope label.
+// Shutting down the context will stop the internal service account cache.
+func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, error) {
 	flag.Parse()
 
 	scheme, decoder, err := newDecoder()
@@ -59,9 +65,10 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 		return nil, err
 	}
 
-	coreClient := kubeClient.CoreV1()
 	authenticationClient := kubeClient.AuthenticationV1()
 	authorizationClient := kubeClient.AuthorizationV1()
+
+	scopeExtractor := newScopeExtractor(ctx, kubeClient)
 
 	upstreamTransportConf, err := upstreamRestConf.TransportConfig()
 	if err != nil {
@@ -80,7 +87,7 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 		return nil, err
 	}
 
-	return &httputil.ReverseProxy{
+	rp := &httputil.ReverseProxy{
 		Transport: &internalErrorRoundtripper{parent: upstreamTransport},
 		Rewrite: rewriteErrorWrapper(internalErrorHeader, func(r *httputil.ProxyRequest) error {
 			r.SetXForwarded()
@@ -100,7 +107,7 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 				return fmt.Errorf("failed to extract user info from bearer token: %w", err)
 			}
 
-			scopeLabel, err := new(scopeExtractor{coreClient: coreClient}).getScopeLabel(r.In.Header, userInfo.Username)
+			scopeLabel, err := scopeExtractor.getScopeLabel(r.In.Header, userInfo.Username)
 			if err != nil {
 				return fmt.Errorf("failed to get scope label: %w", err)
 			}
@@ -185,7 +192,7 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 					matchesListWatchVerb(obj.Spec.ResourceAttributes.Verb) {
 					log.Printf("Allowing cluster-scoped access through proxy for resource %s/%s with verb %s\n", obj.Spec.ResourceAttributes.Group, obj.Spec.ResourceAttributes.Resource, obj.Spec.ResourceAttributes.Verb)
 
-					scopeLabel, err := new(scopeExtractor{coreClient: coreClient}).getScopeLabel(res.Request.Header, userInfo.Username)
+					scopeLabel, err := scopeExtractor.getScopeLabel(res.Request.Header, userInfo.Username)
 					if err != nil {
 						return fmt.Errorf("failed to get scope label: %w", err)
 					}
@@ -229,7 +236,19 @@ func New(upstreamRestConf *rest.Config) (http.Handler, error) {
 
 			return nil
 		},
-	}, nil
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/_readyz", func(w http.ResponseWriter, r *http.Request) {
+		if !scopeExtractor.ready() {
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ready"))
+	})
+	mux.Handle("/", rp)
+
+	return mux, nil
 }
 
 func decodeRequestInfo(req *http.Request) (request.RequestInfo, error) {
@@ -346,7 +365,23 @@ func matchesListWatchVerb(verb string) bool {
 }
 
 type scopeExtractor struct {
-	coreClient corev1client.CoreV1Interface
+	saStore cache.Store
+}
+
+func newScopeExtractor(ctx context.Context, coreClient kubernetes.Interface) *scopeExtractor {
+	saStore := cache.NewStore(cache.MetaNamespaceKeyFunc)
+	go cache.NewReflector(
+		cache.NewListWatchFromClient(coreClient.CoreV1().RESTClient(), "serviceaccounts", metav1.NamespaceAll, fields.Everything()),
+		&corev1.ServiceAccount{},
+		saStore,
+		time.Hour,
+	).RunWithContext(ctx)
+
+	return &scopeExtractor{saStore: saStore}
+}
+
+func (se *scopeExtractor) ready() bool {
+	return se.saStore.LastStoreSyncResourceVersion() != ""
 }
 
 // getScopeLabel extracts the scope label from the request header or from the service account annotation if the user is a service account.
@@ -362,10 +397,14 @@ func (se *scopeExtractor) getScopeLabel(header http.Header, username string) (st
 		if !ok {
 			return "", fmt.Errorf("failed to parse service account username, missing ':' in %q", username)
 		}
-		sa, err := se.coreClient.ServiceAccounts(ns).Get(context.TODO(), name, metav1.GetOptions{})
+		obj, exists, err := se.saStore.GetByKey(ns + "/" + name)
 		if err != nil {
-			return "", fmt.Errorf("failed to get service account %s/%s: %v", ns, name, err)
+			return "", fmt.Errorf("failed to get service account %s/%s from store: %v", ns, name, err)
 		}
+		if !exists {
+			return "", fmt.Errorf("service account %s/%s not found in store", ns, name)
+		}
+		sa := obj.(*corev1.ServiceAccount)
 		injectedLabel = sa.Annotations[ScopeAnnotation]
 	}
 
