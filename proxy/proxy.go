@@ -370,6 +370,8 @@ type scopeExtractor struct {
 	saStore cache.Store
 }
 
+// newScopeExtractor creates a new scopeExtractor that maintains a cache of service accounts in the cluster.
+// The cache is updated in the background and can be stopped by canceling the provided context.
 func newScopeExtractor(ctx context.Context, coreClient kubernetes.Interface) *scopeExtractor {
 	saStore := cache.NewStore(cache.MetaNamespaceKeyFunc)
 	go cache.NewReflector(
