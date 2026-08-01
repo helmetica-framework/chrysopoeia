@@ -254,16 +254,18 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 	return mux, nil
 }
 
+var requestInfoFactory = new(request.RequestInfoFactory{
+	APIPrefixes: sets.NewString(
+		strings.Trim(server.APIGroupPrefix, "/"),
+		strings.Trim(server.DefaultLegacyAPIPrefix, "/"),
+	),
+	GrouplessAPIPrefixes: sets.NewString(
+		strings.Trim(server.DefaultLegacyAPIPrefix, "/"),
+	),
+})
+
 func decodeRequestInfo(req *http.Request) (request.RequestInfo, error) {
-	ri, err := new(request.RequestInfoFactory{
-		APIPrefixes: sets.NewString(
-			strings.Trim(server.APIGroupPrefix, "/"),
-			strings.Trim(server.DefaultLegacyAPIPrefix, "/"),
-		),
-		GrouplessAPIPrefixes: sets.NewString(
-			strings.Trim(server.DefaultLegacyAPIPrefix, "/"),
-		),
-	}).NewRequestInfo(req)
+	ri, err := requestInfoFactory.NewRequestInfo(req)
 	if err != nil {
 		return request.RequestInfo{}, err
 	}
