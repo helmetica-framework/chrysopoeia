@@ -36,7 +36,7 @@ import (
 )
 
 const ScopeHeader = "X-Chrysopoeia-Proxy-Scope"
-const ScopeAnnotation = "chrysopoeia.io/scope"
+const ScopeAnnotation = "proxy.chrysopoeia.io/scope"
 
 const internalErrorHeader = "X-Chrysopoeia-Proxy-Error"
 const scopedListVerb = "scopedlist"
