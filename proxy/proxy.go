@@ -269,9 +269,6 @@ func decodeRequestInfo(req *http.Request) (request.RequestInfo, error) {
 	if err != nil {
 		return request.RequestInfo{}, err
 	}
-	if ri == nil {
-		return request.RequestInfo{}, errors.New("request info is nil")
-	}
 	return *ri, nil
 }
 
