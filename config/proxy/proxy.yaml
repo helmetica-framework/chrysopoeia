@@ -119,13 +119,6 @@ rules:
   - create
 - apiGroups:
   - ''
-  - authentication.k8s.io
-  resources:
-  - '*'
-  verbs:
-  - impersonate
-- apiGroups:
-  - ''
   resources:
   - serviceaccounts
   verbs:
