@@ -246,6 +246,9 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 		}
 		_, _ = w.Write([]byte("ready"))
 	})
+	mux.HandleFunc("/_healthz", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
 	mux.Handle("/", rp)
 
 	return mux, nil
