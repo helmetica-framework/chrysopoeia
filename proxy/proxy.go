@@ -13,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ const ScopeHeader = "X-Chrysopoeia-Proxy-Scope"
 const ScopeAnnotation = "proxy.chrysopoeia.io/scope"
 
 const internalErrorHeader = "X-Chrysopoeia-Proxy-Error"
+const internalErrorStatusCodeHeader = "X-Chrysopoeia-Proxy-Error-Status-Code"
 const scopedListVerb = "scopedlist"
 
 // New creates a new HTTP handler that proxies requests to the upstream Kubernetes API server,
@@ -90,7 +92,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 
 	rp := &httputil.ReverseProxy{
 		Transport: &internalErrorRoundtripper{parent: upstreamTransport},
-		Rewrite: rewriteErrorWrapper(internalErrorHeader, func(r *httputil.ProxyRequest) error {
+		Rewrite: rewriteErrorWrapper(func(r *httputil.ProxyRequest) error {
 			r.SetXForwarded()
 			r.SetURL(upstreamURL)
 
@@ -120,7 +122,10 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 				return fmt.Errorf("failed to check custom verb access: %w", err)
 			}
 			if !allowed {
-				return fmt.Errorf("user %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, scopeLabel, reason)
+				return &errorWithStatusCode{
+					error:      fmt.Errorf("user %s is not allowed to list cluster-scoped resources with label %s: %s", userInfo.Username, scopeLabel, reason),
+					statusCode: http.StatusForbidden,
+				}
 			}
 
 			// Use our authentication that has cluster scoped list/watch.
@@ -130,7 +135,10 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 			// Note we authenticate the label but it's somewhat easy to misconfigure and allow any label.
 			req, err := labels.NewRequirement(scopeLabel, selection.Exists, nil)
 			if err != nil {
-				return fmt.Errorf("failed to create label requirement: %w", err)
+				return &errorWithStatusCode{
+					error:      fmt.Errorf("failed to create label requirement: %w", err),
+					statusCode: http.StatusUnprocessableEntity,
+				}
 			}
 			ls := req.String()
 
@@ -145,8 +153,12 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 		}),
 
 		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, err error) {
+			statusCode := http.StatusInternalServerError
+			if esc, ok := errors.AsType[*errorWithStatusCode](err); ok {
+				statusCode = esc.statusCode
+			}
 			rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			rw.WriteHeader(http.StatusInternalServerError)
+			rw.WriteHeader(statusCode)
 			_, _ = rw.Write([]byte(fmt.Sprintf("Proxy error: %s", err.Error())))
 		},
 
@@ -271,12 +283,22 @@ type internalErrorRoundtripper struct {
 }
 
 func (rtf *internalErrorRoundtripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	if err, ok := r.Header[internalErrorHeader]; ok {
+	if errStr := r.Header.Get(internalErrorHeader); errStr != "" {
 		if r.Body != nil {
 			io.Copy(io.Discard, r.Body)
 			r.Body.Close()
 		}
-		return nil, errors.New(strings.Join(err, ","))
+		if code := r.Header.Get(internalErrorStatusCodeHeader); code != "" {
+			statusCode, err := strconv.Atoi(code)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse internal error status code: %w", err)
+			}
+			return nil, &errorWithStatusCode{
+				error:      errors.New(errStr),
+				statusCode: statusCode,
+			}
+		}
+		return nil, errors.New(errStr)
 	}
 	return rtf.parent.RoundTrip(r)
 }
@@ -399,13 +421,26 @@ func (se *scopeExtractor) getScopeLabel(header http.Header, username string) (st
 // rewriteErrorWrapper wraps a function that modifies a ProxyRequest sets the error header if the function returns an error.
 // This is a workaround for the fact that the ReverseProxy does not have a way to return an error from the Rewrite function.
 // Must be paired with the internalErrorRoundtripper to work correctly.
-func rewriteErrorWrapper(errorHeader string, f func(*httputil.ProxyRequest) error) func(r *httputil.ProxyRequest) {
+func rewriteErrorWrapper(f func(*httputil.ProxyRequest) error) func(r *httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
-		r.Out.Header.Del(errorHeader)
+		r.Out.Header.Del(internalErrorHeader)
+		r.Out.Header.Del(internalErrorStatusCodeHeader)
 		if err := f(r); err != nil {
-			r.Out.Header.Set(errorHeader, err.Error())
+			r.Out.Header.Set(internalErrorHeader, err.Error())
+			if esc, ok := errors.AsType[*errorWithStatusCode](err); ok {
+				r.Out.Header.Set(internalErrorStatusCodeHeader, strconv.Itoa(esc.statusCode))
+			}
 		}
 	}
+}
+
+type errorWithStatusCode struct {
+	error
+	statusCode int
+}
+
+func (e *errorWithStatusCode) Error() string {
+	return fmt.Sprintf("%s (status code: %d)", e.error.Error(), e.statusCode)
 }
 
 func newEncoder(scheme *runtime.Scheme) *encoder {

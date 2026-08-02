@@ -16,6 +16,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -107,7 +108,20 @@ func Test_Proxy(t *testing.T) {
 		cs, err := kubernetes.NewForConfig(c)
 		require.NoError(t, err)
 		nss, err := cs.CoreV1().Namespaces().List(t.Context(), metav1.ListOptions{})
+		require.True(t, apierrors.IsForbidden(err), "expected forbidden error, got: %v", err)
 		require.ErrorContains(t, err, "is not allowed to list cluster-scoped resources with label other-scope")
+		require.Len(t, nss.Items, 0)
+	})
+
+	t.Run("invalid scope label", func(t *testing.T) {
+		c := rest.CopyConfig(harnessedControllerRestConfig)
+		c.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+			return &injectScopeRoundTripper{inner: rt, scope: "!invalid-scope"}
+		})
+		cs, err := kubernetes.NewForConfig(c)
+		require.NoError(t, err)
+		nss, err := cs.CoreV1().Namespaces().List(t.Context(), metav1.ListOptions{})
+		require.True(t, apierrors.IsInvalid(err), "expected invalid error, got: %v", err)
 		require.Len(t, nss.Items, 0)
 	})
 
@@ -267,7 +281,7 @@ func setupHarnessedControllerRBAC(t *testing.T, adminClientset *kubernetes.Clien
 				APIGroups:     []string{""},
 				Resources:     []string{"namespaces"},
 				Verbs:         []string{"scopedlist"},
-				ResourceNames: []string{testScope},
+				ResourceNames: []string{testScope, "!invalid-scope"},
 			},
 		},
 	}, metav1.CreateOptions{})
