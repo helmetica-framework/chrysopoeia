@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/runtime/serializer/cbor"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/runtime/serializer/protobuf"
 	"k8s.io/apimachinery/pkg/selection"
@@ -54,7 +55,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 	if err != nil {
 		return nil, err
 	}
-	protoEncoder := protobuf.NewSerializer(scheme, scheme)
+	encoder := newEncoder(scheme)
 
 	if !impersonationEmpty(upstreamRestConf) {
 		return nil, fmt.Errorf("impersonation is not supported for the upstream config")
@@ -211,31 +212,9 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 				return fmt.Errorf("unexpected response type for SelfSubjectAccessReview: %T", obj)
 			}
 
-			mediaType, _, err := mime.ParseMediaType(res.Header.Get("Content-Type"))
-			if err != nil {
-				return fmt.Errorf("failed to parse Content-Type header in response: %w", err)
+			if err := encoder.encodeIntoBody(res, decodedObj); err != nil {
+				return fmt.Errorf("failed to encode modified response body: %w", err)
 			}
-
-			switch mediaType {
-			case "application/json":
-				encoded, err := jsonEncode(decodedObj, scheme)
-				if err != nil {
-					return fmt.Errorf("failed to encode JSON: %w", err)
-				}
-				rawBody = encoded
-			case "application/vnd.kubernetes.protobuf":
-				encoded, err := runtime.Encode(protoEncoder, decodedObj)
-				if err != nil {
-					return fmt.Errorf("failed to encode protobuf: %w", err)
-				}
-				rawBody = encoded
-			default:
-				return fmt.Errorf("unsupported Content-Type for body rewrite in response: %s", mediaType)
-			}
-
-			res.Header.Del("Content-Length")
-			res.Body = io.NopCloser(bytes.NewReader(rawBody))
-			res.ContentLength = int64(len(rawBody))
 
 			return nil
 		},
@@ -285,10 +264,6 @@ func newDecoder() (*runtime.Scheme, runtime.Decoder, error) {
 	codecFactory := serializer.NewCodecFactory(scheme)
 	universalDecoder := codecFactory.UniversalDeserializer()
 	return scheme, universalDecoder, nil
-}
-
-func jsonEncode(obj runtime.Object, scheme *runtime.Scheme) ([]byte, error) {
-	return runtime.Encode(json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{}), obj)
 }
 
 type internalErrorRoundtripper struct {
@@ -431,4 +406,63 @@ func rewriteErrorWrapper(errorHeader string, f func(*httputil.ProxyRequest) erro
 			r.Out.Header.Set(errorHeader, err.Error())
 		}
 	}
+}
+
+func newEncoder(scheme *runtime.Scheme) *encoder {
+	return &encoder{
+		protoSerializer: protobuf.NewSerializer(scheme, scheme),
+		jsonSerializer:  json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{}),
+		yamlSerializer:  json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{Yaml: true}),
+		cborSerializer:  cbor.NewSerializer(scheme, scheme),
+	}
+}
+
+type encoder struct {
+	protoSerializer *protobuf.Serializer
+	jsonSerializer  *json.Serializer
+	yamlSerializer  *json.Serializer
+	cborSerializer  cbor.Serializer
+}
+
+func (e *encoder) encoderForMediaType(mediaType string) (runtime.Encoder, error) {
+	mediaType, _, err := mime.ParseMediaType(mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse media type: %w", err)
+	}
+
+	// https://kubernetes.io/docs/reference/using-api/api-concepts/#alternate-representations-of-resources
+	var enc runtime.Encoder
+	switch mediaType {
+	case "application/json":
+		enc = e.jsonSerializer
+	case "application/yaml":
+		enc = e.yamlSerializer
+	case "application/vnd.kubernetes.protobuf":
+		enc = e.protoSerializer
+	case "application/cbor":
+		enc = e.cborSerializer
+	default:
+		return nil, fmt.Errorf("unsupported media type: %q", mediaType)
+	}
+
+	return enc, nil
+}
+
+func (e *encoder) encodeIntoBody(res *http.Response, obj runtime.Object) error {
+	contentType := res.Header.Get("Content-Type")
+	enc, err := e.encoderForMediaType(contentType)
+	if err != nil {
+		return fmt.Errorf("failed to get encoder for Content-Type %q: %w", contentType, err)
+	}
+
+	buf := &bytes.Buffer{}
+	if err := enc.Encode(obj, buf); err != nil {
+		return fmt.Errorf("failed to encode %s: %w", contentType, err)
+	}
+
+	res.Header.Del("Content-Length")
+	res.Body = io.NopCloser(buf)
+	res.ContentLength = int64(buf.Len())
+
+	return nil
 }
