@@ -11,12 +11,12 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"github.com/helmetica-framework/chrysopoeia/proxy"
 	"github.com/spf13/cobra"
 	"go.uber.org/multierr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
-	//+kubebuilder:scaffold:imports
+
+	"github.com/helmetica-framework/chrysopoeia/proxy"
 )
 
 func init() {

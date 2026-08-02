@@ -114,7 +114,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 
 			log.Printf("Rewriting request. Scope: %q, RequestInfo: %+v, UserInfo: %+v", scopeLabel, requestInfo, userInfo)
 
-			allowed, reason, err := checkCustomVerbAccess(r.In.Context(), authorizationClient, requestInfo, userInfo, scopeLabel)
+			allowed, reason, err := checkCustomVerbAccess(r.In.Context(), authorizationClient, requestInfo.APIGroup, requestInfo.APIVersion, requestInfo.Resource, userInfo, scopeLabel)
 			if err != nil {
 				return fmt.Errorf("failed to check custom verb access: %w", err)
 			}
@@ -190,16 +190,17 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 				if !obj.Status.Allowed &&
 					obj.Spec.ResourceAttributes.Namespace == "" &&
 					matchesListWatchVerb(obj.Spec.ResourceAttributes.Verb) {
-					log.Printf("Allowing cluster-scoped access through proxy for resource %s/%s with verb %s\n", obj.Spec.ResourceAttributes.Group, obj.Spec.ResourceAttributes.Resource, obj.Spec.ResourceAttributes.Verb)
-
 					scopeLabel, err := scopeExtractor.getScopeLabel(res.Request.Header, userInfo.Username)
 					if err != nil {
 						return fmt.Errorf("failed to get scope label: %w", err)
 					}
 
-					allowed, reason, err := checkCustomVerbAccess(res.Request.Context(), authorizationClient, requestInfo, userInfo, scopeLabel)
+					allowed, reason, err := checkCustomVerbAccess(res.Request.Context(), authorizationClient, obj.Spec.ResourceAttributes.Group, obj.Spec.ResourceAttributes.Version, obj.Spec.ResourceAttributes.Resource, userInfo, scopeLabel)
 					if err != nil {
 						return fmt.Errorf("failed to check custom verb access: %w", err)
+					}
+					if allowed {
+						log.Printf("Allowing cluster-scoped access through proxy for resource %q/%q with verb %q\n", obj.Spec.ResourceAttributes.Group, obj.Spec.ResourceAttributes.Resource, obj.Spec.ResourceAttributes.Verb)
 					}
 					obj.Status.Allowed = allowed
 					obj.Status.Denied = !allowed
@@ -207,27 +208,29 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 				}
 				decodedObj = obj
 			default:
-				log.Printf("Unexpected object type: %T\n", obj)
+				return fmt.Errorf("unexpected response type for SelfSubjectAccessReview: %T", obj)
 			}
 
-			var mediaType string
-			if mediaType, _, err = mime.ParseMediaType(res.Request.Header.Get("Content-Type")); err != nil {
-				log.Printf("Failed to parse media type: %v", err)
+			mediaType, _, err := mime.ParseMediaType(res.Header.Get("Content-Type"))
+			if err != nil {
+				return fmt.Errorf("failed to parse Content-Type header in response: %w", err)
 			}
 
 			switch mediaType {
 			case "application/json":
-				if encoded, encodeErr := jsonEncode(decodedObj, scheme); encodeErr != nil {
-					log.Printf("Failed to encode JSON: %v", encodeErr)
-				} else {
-					rawBody = encoded
+				encoded, err := jsonEncode(decodedObj, scheme)
+				if err != nil {
+					return fmt.Errorf("failed to encode JSON: %w", err)
 				}
+				rawBody = encoded
 			case "application/vnd.kubernetes.protobuf":
-				if encoded, encodeErr := runtime.Encode(protoEncoder, decodedObj); encodeErr != nil {
-					log.Printf("Failed to encode protobuf: %v", encodeErr)
-				} else {
-					rawBody = encoded
+				encoded, err := runtime.Encode(protoEncoder, decodedObj)
+				if err != nil {
+					return fmt.Errorf("failed to encode protobuf: %w", err)
 				}
+				rawBody = encoded
+			default:
+				return fmt.Errorf("unsupported Content-Type for body rewrite in response: %s", mediaType)
 			}
 
 			res.Header.Del("Content-Length")
@@ -330,7 +333,7 @@ func extractUserInfoFromAuthHeader(ctx context.Context, upstreamAuthenticationCl
 	return tokenReview.Status.User, nil
 }
 
-func checkCustomVerbAccess(ctx context.Context, authClient authorizationv1client.AuthorizationV1Interface, requestInfo request.RequestInfo, userInfo authenticationv1.UserInfo, injectedLabel string) (bool, string, error) {
+func checkCustomVerbAccess(ctx context.Context, authClient authorizationv1client.AuthorizationV1Interface, group, version, resource string, userInfo authenticationv1.UserInfo, injectedLabel string) (bool, string, error) {
 	extra := make(map[string]authorizationv1.ExtraValue)
 	for k, v := range userInfo.Extra {
 		extra[k] = authorizationv1.ExtraValue(v)
@@ -343,9 +346,9 @@ func checkCustomVerbAccess(ctx context.Context, authClient authorizationv1client
 			Extra:  extra,
 			ResourceAttributes: &authorizationv1.ResourceAttributes{
 				Verb:     scopedListVerb,
-				Group:    requestInfo.APIGroup,
-				Version:  requestInfo.APIVersion,
-				Resource: requestInfo.Resource,
+				Group:    group,
+				Version:  version,
+				Resource: resource,
 				Name:     injectedLabel,
 			},
 		},

@@ -1,6 +1,6 @@
 module github.com/helmetica-framework/chrysopoeia
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
@@ -87,6 +87,7 @@ require (
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
+	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -135,6 +136,7 @@ require (
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd // indirect
 	oras.land/oras-go/v2 v2.6.1 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.34.0 // indirect
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.24.1 // indirect
 	sigs.k8s.io/controller-tools v0.21.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
@@ -145,6 +147,7 @@ require (
 )
 
 tool (
+	sigs.k8s.io/controller-runtime/tools/setup-envtest
 	sigs.k8s.io/controller-tools/cmd/controller-gen
 	sigs.k8s.io/kustomize/kustomize/v5
 )

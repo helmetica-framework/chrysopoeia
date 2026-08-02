@@ -7,6 +7,7 @@ images:
   newTag: v0.1.0-dev2
 
 resources:
+- role.yaml
 - proxy.yaml
 - issuer.yaml
 - certificate-proxy.yaml

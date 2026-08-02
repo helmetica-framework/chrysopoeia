@@ -9,4 +9,4 @@ KIND ?= go tool sigs.k8s.io/kind
 # Image URL to use all building/pushing image targets
 GHCR_IMG ?= ghcr.io/helmetica-framework/chrysopoeia:$(IMG_TAG)
 
-ENVTEST_K8S_VERSION ?= 1.30.3
+ENVTEST_K8S_VERSION ?= 1.36.2
