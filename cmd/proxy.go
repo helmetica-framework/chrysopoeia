@@ -15,6 +15,7 @@ import (
 	"go.uber.org/multierr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/helmetica-framework/chrysopoeia/proxy"
 )
@@ -43,6 +44,8 @@ func runProxy(cmd *cobra.Command, _ []string) error {
 	proxyCertPath, pcperr := cmd.Flags().GetString("cert-path")
 	proxyCertName, pcnerr := cmd.Flags().GetString("cert-name")
 	proxyCertKey, pckerr := cmd.Flags().GetString("cert-key")
+
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 
 	if err := multierr.Combine(secErr, addrErr, pcperr, pcnerr, pckerr); err != nil {
 		return fmt.Errorf("failed to get flags: %w", err)

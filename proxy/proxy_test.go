@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/testr"
 	"github.com/helmetica-framework/chrysopoeia/proxy"
 	"github.com/helmetica-framework/chrysopoeia/testutil"
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 )
 
@@ -42,7 +44,7 @@ func Test_Proxy(t *testing.T) {
 	require.NoError(t, err)
 	setupHarnessedControllerRBAC(t, adminClientset, hcSAName)
 
-	rp, err := proxy.New(t.Context(), proxyRestConfig)
+	rp, err := proxy.New(log.IntoContext(t.Context(), testr.NewWithOptions(t, testr.Options{Verbosity: 100})), proxyRestConfig)
 	require.NoError(t, err)
 
 	proxy := httptest.NewServer(rp)

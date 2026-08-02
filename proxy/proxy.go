@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
-	"log"
 	"mime"
 	"net/http"
 	"net/http/httputil"
@@ -17,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -38,6 +37,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/transport"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const ScopeHeader = "X-Chrysopoeia-Proxy-Scope"
@@ -51,7 +51,7 @@ const scopedListVerb = "scopedlist"
 // rewriting requests and responses as necessary to enforce access control based on the scope label.
 // Shutting down the context will stop the internal service account cache.
 func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, error) {
-	flag.Parse()
+	l := log.FromContext(ctx).WithName("proxy")
 
 	scheme, decoder, err := newDecoder()
 	if err != nil {
@@ -92,7 +92,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 
 	rp := &httputil.ReverseProxy{
 		Transport: &internalErrorRoundtripper{parent: upstreamTransport},
-		Rewrite: rewriteErrorWrapper(func(r *httputil.ProxyRequest) error {
+		Rewrite: rewriteErrorWrapper(l, func(r *httputil.ProxyRequest) error {
 			r.SetXForwarded()
 			r.SetURL(upstreamURL)
 
@@ -115,7 +115,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 				return fmt.Errorf("failed to get scope label: %w", err)
 			}
 
-			log.Printf("Rewriting request. Scope: %q, RequestInfo: %+v, UserInfo: %+v", scopeLabel, requestInfo, userInfo)
+			l.Info("Rewriting request", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path, "user-name", userInfo.Username, "user-uid", userInfo.UID)
 
 			allowed, reason, err := checkCustomVerbAccess(r.In.Context(), authorizationClient, requestInfo.APIGroup, requestInfo.APIVersion, requestInfo.Resource, userInfo, scopeLabel)
 			if err != nil {
@@ -153,6 +153,8 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 		}),
 
 		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, err error) {
+			l.Error(err, "Proxy error", "path", req.URL.Path, "method", req.Method)
+
 			statusCode := http.StatusInternalServerError
 			if esc, ok := errors.AsType[*errorWithStatusCode](err); ok {
 				statusCode = esc.statusCode
@@ -179,7 +181,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 				return nil
 			}
 
-			log.Printf("Modifying SelfSubjectAccessReview response for request: %+v", requestInfo)
+			l.Info("Modifying SelfSubjectAccessReview response", "path", requestInfo.Path)
 
 			userInfo, err := extractUserInfoFromAuthHeader(res.Request.Context(), authenticationClient, res.Request.Header.Get("Authorization"))
 			if err != nil {
@@ -196,7 +198,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 			if err != nil {
 				return fmt.Errorf("failed to decode response body: %w", err)
 			}
-			log.Printf("Decoded response body %T: %+v\n", decodedObj, decodedObj)
+			l.V(5).Info("Decoded response body", "type", fmt.Sprintf("%T", decodedObj), "object", decodedObj)
 
 			switch obj := decodedObj.(type) {
 			case *authorizationv1.SelfSubjectAccessReview:
@@ -213,7 +215,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 						return fmt.Errorf("failed to check custom verb access: %w", err)
 					}
 					if allowed {
-						log.Printf("Allowing cluster-scoped access through proxy for resource %q/%q with verb %q\n", obj.Spec.ResourceAttributes.Group, obj.Spec.ResourceAttributes.Resource, obj.Spec.ResourceAttributes.Verb)
+						l.V(1).Info("SSAR response modified to allow access", "resource", obj.Spec.ResourceAttributes, "user-name", userInfo.Username, "user-uid", userInfo.UID, "scope", scopeLabel)
 					}
 					obj.Status.Allowed = allowed
 					obj.Status.Denied = !allowed
@@ -288,17 +290,21 @@ func (rtf *internalErrorRoundtripper) RoundTrip(r *http.Request) (*http.Response
 			io.Copy(io.Discard, r.Body)
 			r.Body.Close()
 		}
-		if code := r.Header.Get(internalErrorStatusCodeHeader); code != "" {
-			statusCode, err := strconv.Atoi(code)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse internal error status code: %w", err)
-			}
-			return nil, &errorWithStatusCode{
-				error:      errors.New(errStr),
-				statusCode: statusCode,
+		var code int
+		if codeStr := r.Header.Get(internalErrorStatusCodeHeader); codeStr != "" {
+			statusCode, err := strconv.Atoi(codeStr)
+			if err == nil {
+				code = statusCode
 			}
 		}
-		return nil, errors.New(errStr)
+		if code == 0 {
+			return nil, errors.New(errStr)
+		} else {
+			return nil, &errorWithStatusCode{
+				error:      errors.New(errStr),
+				statusCode: code,
+			}
+		}
 	}
 	return rtf.parent.RoundTrip(r)
 }
@@ -421,11 +427,12 @@ func (se *scopeExtractor) getScopeLabel(header http.Header, username string) (st
 // rewriteErrorWrapper wraps a function that modifies a ProxyRequest sets the error header if the function returns an error.
 // This is a workaround for the fact that the ReverseProxy does not have a way to return an error from the Rewrite function.
 // Must be paired with the internalErrorRoundtripper to work correctly.
-func rewriteErrorWrapper(f func(*httputil.ProxyRequest) error) func(r *httputil.ProxyRequest) {
+func rewriteErrorWrapper(l logr.Logger, f func(*httputil.ProxyRequest) error) func(r *httputil.ProxyRequest) {
 	return func(r *httputil.ProxyRequest) {
 		r.Out.Header.Del(internalErrorHeader)
 		r.Out.Header.Del(internalErrorStatusCodeHeader)
 		if err := f(r); err != nil {
+			l.Error(err, "Rewrite error", "path", r.In.URL.Path, "method", r.In.Method)
 			r.Out.Header.Set(internalErrorHeader, err.Error())
 			if esc, ok := errors.AsType[*errorWithStatusCode](err); ok {
 				r.Out.Header.Set(internalErrorStatusCodeHeader, strconv.Itoa(esc.statusCode))

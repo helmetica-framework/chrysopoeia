@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,17 +40,10 @@ import (
 var metricsAddr string
 var enableLeaderElection bool
 var probeAddr string
-var zapOpts = zap.Options{
-	Development: true,
-}
 var sourceControllerHostnameOverride, imageReflectorControllerHostname string
 
 func init() {
 	RootCmd.AddCommand(controllerCmd)
-
-	zapFlagSet := flag.NewFlagSet("zap", flag.ExitOnError)
-	zapOpts.BindFlags(zapFlagSet)
-	controllerCmd.Flags().AddGoFlagSet(zapFlagSet)
 
 	controllerCmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	controllerCmd.Flags().StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
