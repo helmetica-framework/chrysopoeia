@@ -77,7 +77,7 @@ func init() {
 	controllerCmd.Flags().String("harness-proxy-host", "chrysopoeia-proxy.chrysopoeia-proxy-system.svc", "The host harnessed operators are pointed at instead of the Kubernetes API server.")
 	controllerCmd.Flags().String("harness-proxy-port", "8443", "The port harnessed operators are pointed at instead of the Kubernetes API server.")
 	controllerCmd.Flags().String("harness-proxy-ca-secret-namespace", "chrysopoeia-proxy-system", "The namespace of the secret holding the harness proxy's serving certificate.")
-	controllerCmd.Flags().String("harness-proxy-ca-secret-name", "chrysopoeia-proxy-serving-cert", "The name of the secret holding the harness proxy's serving certificate. Its ca.crt is copied to the namespaces of harnessed operators.")
+	controllerCmd.Flags().String("harness-proxy-ca-secret-name", "proxy-serving-cert", "The name of the secret holding the harness proxy's serving certificate, as in the .spec.secretName of its Certificate. Its ca.crt is copied to the namespaces of harnessed operators.")
 
 	controllerCmd.Flags().StringVar(&sourceControllerHostnameOverride, "source-controller-hostname-override", "", "If set, overrides the hostname used to access the source controller. Useful for testing against a local source controller.")
 	controllerCmd.Flags().StringVar(&imageReflectorControllerHostname, "image-reflector-controller-hostname", "image-reflector-controller-tags.image-reflector-system.svc", "Sets the hostname used to access the image reflector controller to load tags for a OCI image.")
