@@ -1,4 +1,5 @@
 ## Append samples of your project ##
 resources:
 - v1_customresourcedefinitionsource.yaml
+- v1_operatorharness.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

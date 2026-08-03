@@ -7,6 +7,7 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
   - namespaces
   verbs:
   - create
@@ -19,9 +20,29 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -59,6 +80,7 @@ rules:
   - helmetica.io
   resources:
   - customresourcedefinitionsources
+  - operatorharnesses
   verbs:
   - get
   - list
@@ -68,6 +90,7 @@ rules:
   resources:
   - customresourcedefinitionsources/status
   - instancerevisions/status
+  - operatorharnesses/status
   verbs:
   - get
   - patch

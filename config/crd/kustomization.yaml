@@ -4,6 +4,7 @@
 resources:
 - bases/helmetica.io_customresourcedefinitionsources.yaml
 - bases/helmetica.io_instancerevisions.yaml
+- bases/helmetica.io_operatorharnesses.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 # the following config is for teaching kustomize how to do kustomization for CRDs.

@@ -30,6 +30,14 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1.InstanceRevisionApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("InstanceRevisionSpec"):
 		return &apiv1.InstanceRevisionSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("OperatorHarness"):
+		return &apiv1.OperatorHarnessApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("OperatorHarnessOperator"):
+		return &apiv1.OperatorHarnessOperatorApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("OperatorHarnessSpec"):
+		return &apiv1.OperatorHarnessSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("OperatorHarnessStatus"):
+		return &apiv1.OperatorHarnessStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("SourceReference"):
 		return &apiv1.SourceReferenceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("VersionDiscovery"):

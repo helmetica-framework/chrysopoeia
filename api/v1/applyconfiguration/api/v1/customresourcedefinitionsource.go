@@ -3,8 +3,11 @@
 package v1
 
 import (
+	apiv1 "github.com/helmetica-framework/chrysopoeia/api/v1"
+	internal "github.com/helmetica-framework/chrysopoeia/api/v1/applyconfiguration/internal"
 	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
@@ -28,6 +31,47 @@ func CustomResourceDefinitionSource(name, namespace string) *CustomResourceDefin
 	b.WithKind("CustomResourceDefinitionSource")
 	b.WithAPIVersion("helmetica.io/v1")
 	return b
+}
+
+// ExtractCustomResourceDefinitionSourceFrom extracts the applied configuration owned by fieldManager from
+// customResourceDefinitionSource for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
+// customResourceDefinitionSource must be a unmodified CustomResourceDefinitionSource API object that was retrieved from the Kubernetes API.
+// ExtractCustomResourceDefinitionSourceFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractCustomResourceDefinitionSourceFrom(customResourceDefinitionSource *apiv1.CustomResourceDefinitionSource, fieldManager string, subresource string) (*CustomResourceDefinitionSourceApplyConfiguration, error) {
+	b := &CustomResourceDefinitionSourceApplyConfiguration{}
+	err := managedfields.ExtractInto(customResourceDefinitionSource, internal.Parser().Type("com.github.helmetica-framework.chrysopoeia.api.v1.CustomResourceDefinitionSource"), fieldManager, b, subresource)
+	if err != nil {
+		return nil, err
+	}
+	b.WithName(customResourceDefinitionSource.Name)
+	b.WithNamespace(customResourceDefinitionSource.Namespace)
+
+	b.WithKind("CustomResourceDefinitionSource")
+	b.WithAPIVersion("helmetica.io/v1")
+	return b, nil
+}
+
+// ExtractCustomResourceDefinitionSource extracts the applied configuration owned by fieldManager from
+// customResourceDefinitionSource. If no managedFields are found in customResourceDefinitionSource for fieldManager, a
+// CustomResourceDefinitionSourceApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// customResourceDefinitionSource must be a unmodified CustomResourceDefinitionSource API object that was retrieved from the Kubernetes API.
+// ExtractCustomResourceDefinitionSource provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractCustomResourceDefinitionSource(customResourceDefinitionSource *apiv1.CustomResourceDefinitionSource, fieldManager string) (*CustomResourceDefinitionSourceApplyConfiguration, error) {
+	return ExtractCustomResourceDefinitionSourceFrom(customResourceDefinitionSource, fieldManager, "")
+}
+
+// ExtractCustomResourceDefinitionSourceStatus extracts the applied configuration owned by fieldManager from
+// customResourceDefinitionSource for the status subresource.
+func ExtractCustomResourceDefinitionSourceStatus(customResourceDefinitionSource *apiv1.CustomResourceDefinitionSource, fieldManager string) (*CustomResourceDefinitionSourceApplyConfiguration, error) {
+	return ExtractCustomResourceDefinitionSourceFrom(customResourceDefinitionSource, fieldManager, "status")
 }
 
 func (b CustomResourceDefinitionSourceApplyConfiguration) IsApplyConfiguration() {}

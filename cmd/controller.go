@@ -15,11 +15,13 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/spf13/cobra"
 	"go.uber.org/multierr"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	"github.com/helmetica-framework/chrysopoeia/controllers"
@@ -65,6 +68,16 @@ func init() {
 	controllerCmd.Flags().String("metrics-cert-path", "", "The directory that contains the metrics server certificate.")
 	controllerCmd.Flags().String("metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
 	controllerCmd.Flags().String("metrics-cert-key", "tls.key", "The name of the metrics server key file.")
+
+	controllerCmd.Flags().String("webhook-service-name", "chrysopoeia-webhook-service", "The name of the service fronting this controller's webhook server. Used in the webhook configurations generated for OperatorHarnesses.")
+	controllerCmd.Flags().String("webhook-service-namespace", "", "The namespace of the service fronting this controller's webhook server. Defaults to the controller namespace.")
+	controllerCmd.Flags().Int32("webhook-service-port", 443, "The port of the service fronting this controller's webhook server.")
+	controllerCmd.Flags().String("webhook-ca-name", "ca.crt", "The name of the CA certificate file in the webhook certificate directory. Used as the caBundle in the webhook configurations generated for OperatorHarnesses.")
+
+	controllerCmd.Flags().String("harness-proxy-host", "chrysopoeia-proxy.chrysopoeia-proxy-system.svc", "The host harnessed operators are pointed at instead of the Kubernetes API server.")
+	controllerCmd.Flags().String("harness-proxy-port", "8443", "The port harnessed operators are pointed at instead of the Kubernetes API server.")
+	controllerCmd.Flags().String("harness-proxy-ca-secret-namespace", "chrysopoeia-proxy-system", "The namespace of the secret holding the harness proxy's serving certificate.")
+	controllerCmd.Flags().String("harness-proxy-ca-secret-name", "chrysopoeia-proxy-serving-cert", "The name of the secret holding the harness proxy's serving certificate. Its ca.crt is copied to the namespaces of harnessed operators.")
 
 	controllerCmd.Flags().StringVar(&sourceControllerHostnameOverride, "source-controller-hostname-override", "", "If set, overrides the hostname used to access the source controller. Useful for testing against a local source controller.")
 	controllerCmd.Flags().StringVar(&imageReflectorControllerHostname, "image-reflector-controller-hostname", "image-reflector-controller-tags.image-reflector-system.svc", "Sets the hostname used to access the image reflector controller to load tags for a OCI image.")
@@ -101,11 +114,26 @@ func runController(cmd *cobra.Command, _ []string) error {
 	metricsCertName, mcnerr := cmd.Flags().GetString("metrics-cert-name")
 	metricsCertKey, mckerr := cmd.Flags().GetString("metrics-cert-key")
 
+	webhookServiceName, wsnerr := cmd.Flags().GetString("webhook-service-name")
+	webhookServiceNamespace, wssnerr := cmd.Flags().GetString("webhook-service-namespace")
+	webhookServicePort, wsperr := cmd.Flags().GetInt32("webhook-service-port")
+	webhookCAName, wcaerr := cmd.Flags().GetString("webhook-ca-name")
+
+	harnessProxyHost, hpherr := cmd.Flags().GetString("harness-proxy-host")
+	harnessProxyPort, hpperr := cmd.Flags().GetString("harness-proxy-port")
+	harnessProxyCANamespace, hpcnserr := cmd.Flags().GetString("harness-proxy-ca-secret-namespace")
+	harnessProxyCAName, hpcnerr := cmd.Flags().GetString("harness-proxy-ca-secret-name")
+
 	sourceControllerHostnameOverride, sherr := cmd.Flags().GetString("source-controller-hostname-override")
 	imageReflectorControllerHostname, irherr := cmd.Flags().GetString("image-reflector-controller-hostname")
 
-	if err := multierr.Combine(cnerr, wcperr, wcnerr, wckerr, mcperr, mcnerr, mckerr, smerr, sherr, irherr); err != nil {
+	if err := multierr.Combine(cnerr, wcperr, wcnerr, wckerr, mcperr, mcnerr, mckerr, smerr, sherr, irherr,
+		wsnerr, wssnerr, wsperr, wcaerr, hpherr, hpperr, hpcnserr, hpcnerr); err != nil {
 		return fmt.Errorf("failed to get flags: %w", err)
+	}
+
+	if webhookServiceNamespace == "" {
+		webhookServiceNamespace = controllerNamespace
 	}
 
 	cmd.Println("Starting the controller manager",
@@ -201,6 +229,19 @@ func runController(cmd *cobra.Command, _ []string) error {
 				},
 				&rbacv1.RoleBinding{}:    {},
 				&corev1.ServiceAccount{}: {},
+
+				// The harness only ever reads the proxy's serving certificate.
+				&corev1.Secret{}: {
+					Namespaces: map[string]cache.Config{
+						harnessProxyCANamespace: {},
+					},
+				},
+				&corev1.ConfigMap{}: {
+					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
+				},
+				&admissionregistrationv1.MutatingWebhookConfiguration{}: {
+					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
+				},
 			},
 		},
 
@@ -260,6 +301,49 @@ func runController(cmd *cobra.Command, _ []string) error {
 	}
 	if err := imm.SetupWithManager("instance-manager-manager", mgr); err != nil {
 		return fmt.Errorf("unable to create RevisionManagerManager controller: %w", err)
+	}
+
+	// The OperatorHarness proxy injection needs a webhook server: it patches the harnessed
+	// operator's pods and points the generated webhook configurations at this controller.
+	if webhookCertPath == "" {
+		cmd.Println("No webhook certificate configured, not starting the OperatorHarness controller")
+	} else {
+		proxyInjection := controllers.ProxyInjection{
+			ServiceHost: harnessProxyHost,
+			ServicePort: harnessProxyPort,
+			CASecret: types.NamespacedName{
+				Namespace: harnessProxyCANamespace,
+				Name:      harnessProxyCAName,
+			},
+		}
+
+		ohm := &controllers.OperatorHarnessManager{
+			Client:   mgr.GetClient(),
+			Scheme:   mgr.GetScheme(),
+			Recorder: mgr.GetEventRecorder("operator-harness-manager"),
+
+			Proxy: proxyInjection,
+			WebhookService: controllers.WebhookService{
+				Name:      webhookServiceName,
+				Namespace: webhookServiceNamespace,
+				Port:      webhookServicePort,
+				CABundle: func() ([]byte, error) {
+					return os.ReadFile(filepath.Join(webhookCertPath, webhookCAName))
+				},
+			},
+		}
+		if err := ohm.SetupWithManager("operator-harness-manager", mgr); err != nil {
+			return fmt.Errorf("unable to create OperatorHarnessManager controller: %w", err)
+		}
+
+		mgr.GetWebhookServer().Register(controllers.ProxyInjectionWebhookPath, &webhook.Admission{
+			Handler: &controllers.PodProxyInjector{
+				Client:  mgr.GetClient(),
+				Decoder: admission.NewDecoder(mgr.GetScheme()),
+
+				Proxy: proxyInjection,
+			},
+		})
 	}
 
 	//+kubebuilder:scaffold:builder

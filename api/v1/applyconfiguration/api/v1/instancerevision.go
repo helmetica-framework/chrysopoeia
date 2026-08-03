@@ -4,8 +4,10 @@ package v1
 
 import (
 	apiv1 "github.com/helmetica-framework/chrysopoeia/api/v1"
+	internal "github.com/helmetica-framework/chrysopoeia/api/v1/applyconfiguration/internal"
 	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
@@ -29,6 +31,47 @@ func InstanceRevision(name, namespace string) *InstanceRevisionApplyConfiguratio
 	b.WithKind("InstanceRevision")
 	b.WithAPIVersion("helmetica.io/v1")
 	return b
+}
+
+// ExtractInstanceRevisionFrom extracts the applied configuration owned by fieldManager from
+// instanceRevision for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
+// instanceRevision must be a unmodified InstanceRevision API object that was retrieved from the Kubernetes API.
+// ExtractInstanceRevisionFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractInstanceRevisionFrom(instanceRevision *apiv1.InstanceRevision, fieldManager string, subresource string) (*InstanceRevisionApplyConfiguration, error) {
+	b := &InstanceRevisionApplyConfiguration{}
+	err := managedfields.ExtractInto(instanceRevision, internal.Parser().Type("com.github.helmetica-framework.chrysopoeia.api.v1.InstanceRevision"), fieldManager, b, subresource)
+	if err != nil {
+		return nil, err
+	}
+	b.WithName(instanceRevision.Name)
+	b.WithNamespace(instanceRevision.Namespace)
+
+	b.WithKind("InstanceRevision")
+	b.WithAPIVersion("helmetica.io/v1")
+	return b, nil
+}
+
+// ExtractInstanceRevision extracts the applied configuration owned by fieldManager from
+// instanceRevision. If no managedFields are found in instanceRevision for fieldManager, a
+// InstanceRevisionApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// instanceRevision must be a unmodified InstanceRevision API object that was retrieved from the Kubernetes API.
+// ExtractInstanceRevision provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractInstanceRevision(instanceRevision *apiv1.InstanceRevision, fieldManager string) (*InstanceRevisionApplyConfiguration, error) {
+	return ExtractInstanceRevisionFrom(instanceRevision, fieldManager, "")
+}
+
+// ExtractInstanceRevisionStatus extracts the applied configuration owned by fieldManager from
+// instanceRevision for the status subresource.
+func ExtractInstanceRevisionStatus(instanceRevision *apiv1.InstanceRevision, fieldManager string) (*InstanceRevisionApplyConfiguration, error) {
+	return ExtractInstanceRevisionFrom(instanceRevision, fieldManager, "status")
 }
 
 func (b InstanceRevisionApplyConfiguration) IsApplyConfiguration() {}

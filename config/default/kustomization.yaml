@@ -17,17 +17,16 @@ bases:
 - ../rbac
 - ../manager
 - ../prometheus
-# - ../webhook
+# Serves the pod mutating webhook the OperatorHarness proxy injection relies on.
+- ../webhook
 - ../certmanager
 - metrics_service.yaml
 
 # Uncomment the patches line if you enable Metrics
 patches:
-# [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
-# crd/kustomization.yaml
-# - path: manager_webhook_patch.yaml
-#   target:
-#     kind: Deployment
+- path: manager_webhook_patch.yaml
+  target:
+    kind: Deployment
 
 - path: manager_metrics_patch.yaml
   target:
@@ -102,42 +101,42 @@ replacements:
         index: 1
         create: true
 
-# - source: # Uncomment the following block if you have any webhook
-#     kind: Service
-#     version: v1
-#     name: webhook-service
-#     fieldPath: .metadata.name # Name of the service
-#   targets:
-#     - select:
-#         kind: Certificate
-#         group: cert-manager.io
-#         version: v1
-#         name: serving-cert
-#       fieldPaths:
-#         - .spec.dnsNames.0
-#         - .spec.dnsNames.1
-#       options:
-#         delimiter: '.'
-#         index: 0
-#         create: true
-# - source:
-#     kind: Service
-#     version: v1
-#     name: webhook-service
-#     fieldPath: .metadata.namespace # Namespace of the service
-#   targets:
-#     - select:
-#         kind: Certificate
-#         group: cert-manager.io
-#         version: v1
-#         name: serving-cert
-#       fieldPaths:
-#         - .spec.dnsNames.0
-#         - .spec.dnsNames.1
-#       options:
-#         delimiter: '.'
-#         index: 1
-#         create: true
+- source:
+    kind: Service
+    version: v1
+    name: webhook-service
+    fieldPath: .metadata.name # Name of the service
+  targets:
+    - select:
+        kind: Certificate
+        group: cert-manager.io
+        version: v1
+        name: serving-cert
+      fieldPaths:
+        - .spec.dnsNames.0
+        - .spec.dnsNames.1
+      options:
+        delimiter: '.'
+        index: 0
+        create: true
+- source:
+    kind: Service
+    version: v1
+    name: webhook-service
+    fieldPath: .metadata.namespace # Namespace of the service
+  targets:
+    - select:
+        kind: Certificate
+        group: cert-manager.io
+        version: v1
+        name: serving-cert
+      fieldPaths:
+        - .spec.dnsNames.0
+        - .spec.dnsNames.1
+      options:
+        delimiter: '.'
+        index: 1
+        create: true
 
 # - source: # Uncomment the following block if you have any webhook
 #     kind: Service
