@@ -1,0 +1,18 @@
+apiVersion: helmetica.io/v1
+kind: DependencyGroup
+metadata:
+  labels:
+    app.kubernetes.io/name: chrysopoeia
+    app.kubernetes.io/managed-by: kustomize
+  name: mariadb
+spec:
+  # The CRDs bundled by this group. Charts depend on the group, never on the individual CRDs.
+  crds:
+  - name: backups.k8s.mariadb.com
+  - name: connections.k8s.mariadb.com
+  - name: databases.k8s.mariadb.com
+  - name: mariadbs.k8s.mariadb.com
+  # The harness of the operator managing these CRDs.
+  harnessRef:
+    kind: OperatorHarness
+    name: mariadb-operator

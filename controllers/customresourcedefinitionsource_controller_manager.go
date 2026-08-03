@@ -37,6 +37,10 @@ import (
 	"github.com/helmetica-framework/chrysopoeia/pkg/schemagen"
 )
 
+// CustomResourceDefinitionSourceManager turns the Helm chart a CustomResourceDefinitionSource points
+// at into the CRD that instances of that chart are claimed with: it loads the chart from the Flux
+// OCIRepository, derives a CRD from the chart's values schema, and pins the versions users may pick
+// to the tags the Flux ImageRepository discovered.
 type CustomResourceDefinitionSourceManager struct {
 	client.Client
 	Scheme   *runtime.Scheme
@@ -89,6 +93,18 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 			}
 		}
 	}()
+
+	var sources chrysopoeiav1.CustomResourceDefinitionSourceList
+	if err := r.List(ctx, &sources, client.InNamespace(source.Namespace)); err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to list CustomResourceDefinitionSources: %w", err)
+	}
+	if conflicts := conflictingProviders(source, sources.Items); len(conflicts) > 0 {
+		l.Info("CustomResourceDefinitionSource provides a DependencyGroup another source provides", "conflicts", conflicts)
+		r.Recorder.Eventf(&source, nil, "Warning", "DuplicateProvider", "Validate", "%s", strings.Join(conflicts, "; "))
+		statusCondition.Reason = "DependencyGroupProvidedByOtherSource"
+		statusCondition.Message = strings.Join(conflicts, "; ")
+		return ctrl.Result{}, nil
+	}
 
 	var ociRepo sourcev1.OCIRepository
 	if err := r.Get(ctx, client.ObjectKey{Namespace: source.Namespace, Name: source.Spec.Reference.Name}, &ociRepo); err != nil {
@@ -280,6 +296,15 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 				providesProp.Default = &apiextv1.JSON{Raw: providesJSON}
 				spec.Properties["provides"] = providesProp
 			}
+			if managesProp, ok := spec.Properties["manages"]; ok && len(source.Spec.Manages) > 0 {
+				managesJSON, err := json.Marshal(source.Spec.Manages)
+				if err != nil {
+					l.Error(err, "Failed to marshal source manages to JSON", "SourceManages", source.Spec.Manages)
+					return ctrl.Result{}, err
+				}
+				managesProp.Default = &apiextv1.JSON{Raw: managesJSON}
+				spec.Properties["manages"] = managesProp
+			}
 			if versionProp, ok := spec.Properties["version"]; ok {
 				versionProp.Enum = make([]apiextv1.JSON, len(tags))
 				for i, tag := range tags {
@@ -395,6 +420,46 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 	return ctrl.Result{}, nil
 }
 
+// conflictingProviders returns a message for every DependencyGroup that source provides and another
+// source provides with precedence. A group's CRDs are installed by the chart that provides them, so
+// two providers would fight over the same CRDs. The older source wins a group and ties are broken by
+// name, so that the winner is the same no matter which of the sources is being reconciled.
+func conflictingProviders(source chrysopoeiav1.CustomResourceDefinitionSource, sources []chrysopoeiav1.CustomResourceDefinitionSource) []string {
+	var conflicts []string
+	for _, ref := range source.Spec.Provides {
+		if ref.DependencyGroup == nil {
+			continue
+		}
+		for _, other := range sources {
+			if other.Name == source.Name || !other.DeletionTimestamp.IsZero() {
+				continue
+			}
+			if !providesGroup(other, ref.DependencyGroup.Name) || !providerPrecedes(other, source) {
+				continue
+			}
+			conflicts = append(conflicts,
+				fmt.Sprintf("DependencyGroup %q is already provided by CustomResourceDefinitionSource %q", ref.DependencyGroup.Name, other.Name))
+		}
+	}
+	return conflicts
+}
+
+// providesGroup reports whether source claims to ship the CRDs of the named DependencyGroup.
+func providesGroup(source chrysopoeiav1.CustomResourceDefinitionSource, name string) bool {
+	return slices.ContainsFunc(source.Spec.Provides, func(ref chrysopoeiav1.DependencyReference) bool {
+		return ref.DependencyGroup != nil && ref.DependencyGroup.Name == name
+	})
+}
+
+// providerPrecedes reports whether a's claim on a DependencyGroup beats b's: the older source wins,
+// and sources created in the same instant are ordered by name so that neither of them wins twice.
+func providerPrecedes(a, b chrysopoeiav1.CustomResourceDefinitionSource) bool {
+	if !a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+		return a.CreationTimestamp.Before(&b.CreationTimestamp)
+	}
+	return a.Name < b.Name
+}
+
 const (
 	sourceReferenceIndexField           = ".spec.reference.name"
 	versionDiscoveryReferenceIndexField = ".spec.versionDiscovery.reference.name"
@@ -422,10 +487,37 @@ func (r *CustomResourceDefinitionSourceManager) SetupWithManager(name string, mg
 
 	return builder.ControllerManagedBy(mgr).
 		For(&chrysopoeiav1.CustomResourceDefinitionSource{}).
+		// Whether a source may provide a group depends on the other sources: one that is deleted, or
+		// that drops a group, frees it for a source that was rejected for it.
+		Watches(&chrysopoeiav1.CustomResourceDefinitionSource{}, handler.EnqueueRequestsFromMapFunc(allCustomResourceDefinitionSourcesMapFunc(mgr.GetClient(), controllerNamespace))).
 		Watches(&sourcev1.OCIRepository{}, handler.EnqueueRequestsFromMapFunc(ociRepositoryToCustomResourceDefinitionSourceMapFunc(mgr.GetClient(), controllerNamespace))).
 		Watches(&imagereflectorv1.ImageRepository{}, handler.EnqueueRequestsFromMapFunc(imageRepositoryToCustomResourceDefinitionSourceMapFunc(mgr.GetClient(), controllerNamespace))).
 		Named(name).
 		Complete(r)
+}
+
+// allCustomResourceDefinitionSourcesMapFunc maps an object in the controller namespace to every
+// CustomResourceDefinitionSource in that namespace. A source's claim on a DependencyGroup is only
+// valid relative to the other sources, so all of them have to be re-validated whenever one of them
+// appears, changes, or goes away.
+func allCustomResourceDefinitionSourcesMapFunc(c client.Client, controllerNamespace string) func(ctx context.Context, o client.Object) []reconcile.Request {
+	return func(ctx context.Context, o client.Object) []reconcile.Request {
+		if o.GetNamespace() != controllerNamespace {
+			return nil
+		}
+
+		var sources chrysopoeiav1.CustomResourceDefinitionSourceList
+		if err := c.List(ctx, &sources, client.InNamespace(controllerNamespace)); err != nil {
+			log.FromContext(ctx).Error(err, "Failed to list CustomResourceDefinitionSources to re-validate their claims")
+			return nil
+		}
+		requests := make([]reconcile.Request, len(sources.Items))
+		for i, source := range sources.Items {
+			requests[i].Name = source.Name
+			requests[i].Namespace = source.Namespace
+		}
+		return requests
+	}
 }
 
 func ociRepositoryToCustomResourceDefinitionSourceMapFunc(c client.Client, controllerNamespace string) func(ctx context.Context, o client.Object) []reconcile.Request {

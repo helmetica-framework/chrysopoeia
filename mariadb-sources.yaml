@@ -1,12 +1,9 @@
 apiVersion: helmetica.io/v1
-kind: CustomResourceDefinitionSource
+kind: DependencyGroup
 metadata:
-  name: v26.mariadb-crds
+  name: mariadb
 spec:
-  crdNames:
-    kind: MariaDBOperatorCRD
-    plural: mariadboperatorcrds
-  provides:
+  crds:
   - name: backups.k8s.mariadb.com
   - name: connections.k8s.mariadb.com
   - name: databases.k8s.mariadb.com
@@ -19,6 +16,23 @@ spec:
   - name: restores.k8s.mariadb.com
   - name: sqljobs.k8s.mariadb.com
   - name: users.k8s.mariadb.com
+  # The harness is created by the release controller for the instance that manages this group, and is
+  # named after the group's scope.
+  harnessRef:
+    kind: OperatorHarness
+    name: mariadb
+---
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+metadata:
+  name: v26.mariadb-crds
+spec:
+  crdNames:
+    kind: MariaDBOperatorCRD
+    plural: mariadboperatorcrds
+  provides:
+  - dependencyGroup:
+      name: mariadb
   reference:
     apiVersion: source.toolkit.fluxcd.io/v1
     kind: OCIRepository
@@ -61,20 +75,11 @@ spec:
   crdNames:
     kind: MariaDBOperator
     plural: mariadboperators
-  # TODO manages? or force operator charts to bring their CRDs, which would make testing harder
-  provides:
-  - name: backups.k8s.mariadb.com
-  - name: connections.k8s.mariadb.com
-  - name: databases.k8s.mariadb.com
-  - name: externalmariadbs.k8s.mariadb.com
-  - name: grants.k8s.mariadb.com
-  - name: mariadbs.k8s.mariadb.com
-  - name: maxscales.k8s.mariadb.com
-  - name: physicalbackups.k8s.mariadb.com
-  - name: pointintimerecoveries.k8s.mariadb.com
-  - name: restores.k8s.mariadb.com
-  - name: sqljobs.k8s.mariadb.com
-  - name: users.k8s.mariadb.com
+  # The CRDs ship in a chart of their own, `v26.mariadb-crds` provides them. This source only runs the
+  # operator, so it manages the group without claiming to install its CRDs.
+  manages:
+  - dependencyGroup:
+      name: mariadb
   reference:
     apiVersion: source.toolkit.fluxcd.io/v1
     kind: OCIRepository
@@ -127,18 +132,8 @@ spec:
       kind: ImageRepository
       name: mariadb-cluster-v26
   requires:
-  - name: backups.k8s.mariadb.com
-  - name: connections.k8s.mariadb.com
-  - name: databases.k8s.mariadb.com
-  - name: externalmariadbs.k8s.mariadb.com
-  - name: grants.k8s.mariadb.com
-  - name: mariadbs.k8s.mariadb.com
-  - name: maxscales.k8s.mariadb.com
-  - name: physicalbackups.k8s.mariadb.com
-  - name: pointintimerecoveries.k8s.mariadb.com
-  - name: restores.k8s.mariadb.com
-  - name: sqljobs.k8s.mariadb.com
-  - name: users.k8s.mariadb.com
+  - dependencyGroup:
+      name: mariadb
 ---
 apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository

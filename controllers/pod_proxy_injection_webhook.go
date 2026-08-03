@@ -85,10 +85,8 @@ func (i *PodProxyInjector) Handle(ctx context.Context, req admission.Request) ad
 func matchingHarness(harnesses []chrysopoeiav1.OperatorHarness, namespace, serviceAccount string) *chrysopoeiav1.OperatorHarness {
 	for i := range harnesses {
 		harness := &harnesses[i]
-		if !harness.Spec.Operator.InjectProxyConfiguration || harness.Spec.Operator.Namespace != namespace {
-			continue
-		}
-		if slices.Contains(harness.Spec.Operator.ServiceAccounts, serviceAccount) {
+		if harness.Spec.Operator.InjectProxyConfiguration &&
+			harnessesServiceAccount(*harness, namespace, serviceAccount) {
 			return harness
 		}
 	}

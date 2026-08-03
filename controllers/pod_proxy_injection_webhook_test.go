@@ -123,6 +123,9 @@ func TestMatchingHarness(t *testing.T) {
 		harness("mariadb-operator", "mariadb-operator", true, "operator-mariadb-operator"),
 		harness("k8up", "k8up-system", true, "k8up-operator", "default"),
 		harness("disabled", "disabled-operator", false, "disabled-operator"),
+		// What the release controller creates: the operator's chart names its service account, so the
+		// whole instance namespace is harnessed.
+		harness("any", "any-operator", true),
 	}
 
 	for _, tc := range []struct {
@@ -136,6 +139,7 @@ func TestMatchingHarness(t *testing.T) {
 		{"other service account in a harnessed namespace", "mariadb-operator", "some-job", ""},
 		{"harnessed service account in another namespace", "other", "operator-mariadb-operator", ""},
 		{"proxy injection disabled", "disabled-operator", "disabled-operator", ""},
+		{"no service accounts harnesses the whole namespace", "any-operator", "whatever", "any"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			match := matchingHarness(harnesses, tc.namespace, tc.serviceAccount)
@@ -147,6 +151,22 @@ func TestMatchingHarness(t *testing.T) {
 			assert.Equal(t, tc.want, match.Name)
 		})
 	}
+}
+
+func TestHarnessesServiceAccount(t *testing.T) {
+	named := harness("mariadb", "mariadb-operator", true, "operator-mariadb-operator")
+	// What the release controller creates for an operator instance: the chart names the service
+	// account, so the whole instance namespace is harnessed.
+	whole := harness("mariadb", "mariadb-operator", true)
+
+	assert.True(t, harnessesServiceAccount(named, "mariadb-operator", "operator-mariadb-operator"))
+	assert.False(t, harnessesServiceAccount(named, "mariadb-operator", "default"),
+		"a named harness applies to its service accounts only")
+	assert.False(t, harnessesServiceAccount(named, "other", "operator-mariadb-operator"),
+		"a harness never reaches out of the operator's namespace")
+
+	assert.True(t, harnessesServiceAccount(whole, "mariadb-operator", "anything"))
+	assert.False(t, harnessesServiceAccount(whole, "other", "anything"))
 }
 
 func harness(name, namespace string, injectProxyConfiguration bool, serviceAccounts ...string) chrysopoeiav1.OperatorHarness {

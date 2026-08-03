@@ -26,10 +26,11 @@ type OperatorHarnessOperator struct {
 	Namespace string `json:"namespace"`
 
 	// ServiceAccounts are the service accounts, in Namespace, the harnessed operator's pods run as.
-	// Only pods running as one of these service accounts are harnessed.
-	// +kubebuilder:validation:MinItems=1
-	// +required
-	ServiceAccounts []string `json:"serviceAccounts"`
+	// Only pods running as one of these service accounts are harnessed. If empty, every pod in
+	// Namespace is harnessed, which is what a namespace holding a single operator wants: the service
+	// account is named by the operator's chart and does not have to be known up front.
+	// +optional
+	ServiceAccounts []string `json:"serviceAccounts,omitempty"`
 
 	// InjectProxyConfiguration defines if the harnessed operator should have the harness proxy injected.
 	// If enabled, the harness copies the proxy's CA certificate to Namespace and registers a mutating

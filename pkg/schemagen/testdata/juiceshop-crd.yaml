@@ -49,29 +49,72 @@ spec:
                     - Manual
                     type: string
                 type: object
+              manages:
+                description: The dependency group whose CRDs the operator of this
+                  service manages.
+                items:
+                  properties:
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
+                  type: object
+                type: array
               ociUrl:
                 description: The OCI repository where the service bundle is stored.
                 type: string
               provides:
-                description: The list of dependencies that this service provides.
+                description: The list of dependency groups whose CRDs this service
+                  ships.
                 items:
                   properties:
-                    name:
-                      description: The name of the dependency that this service provides.
-                        Should be the fully qualified crd name as written in the .metadata.name
-                        field of the CRD.
-                      type: string
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
                   type: object
                 type: array
               requires:
-                description: The list of dependencies that this service requires.
+                description: The list of dependency groups that this service consumes.
                 items:
                   properties:
-                    name:
-                      description: The name of the dependency that this service requires.
-                        Should be the fully qualified crd name as written in the .metadata.name
-                        field of the CRD.
-                      type: string
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
                   type: object
                 type: array
               values:

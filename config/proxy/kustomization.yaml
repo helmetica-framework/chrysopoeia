@@ -4,7 +4,7 @@ namePrefix: chrysopoeia-
 
 images:
 - name: ghcr.io/helmetica-framework/chrysopoeia
-  newTag: v0.1.0-dev2
+  newTag: v0.1.0-dev17
 
 resources:
 - role.yaml
@@ -23,33 +23,33 @@ replacements:
     name: proxy
     fieldPath: .metadata.name # Name of the service
   targets:
-    - select:
-        kind: Certificate
-        group: cert-manager.io
-        version: v1
-        name: proxy-serving-cert
-      fieldPaths:
-        - .spec.dnsNames.0
-        - .spec.dnsNames.1
-      options:
-        delimiter: '.'
-        index: 0
-        create: true
+  - select:
+      kind: Certificate
+      group: cert-manager.io
+      version: v1
+      name: proxy-serving-cert
+    fieldPaths:
+    - .spec.dnsNames.0
+    - .spec.dnsNames.1
+    options:
+      delimiter: '.'
+      index: 0
+      create: true
 - source:
     kind: Service
     version: v1
     name: proxy
     fieldPath: .metadata.namespace # Namespace of the service
   targets:
-    - select:
-        kind: Certificate
-        group: cert-manager.io
-        version: v1
-        name: proxy-serving-cert
-      fieldPaths:
-        - .spec.dnsNames.0
-        - .spec.dnsNames.1
-      options:
-        delimiter: '.'
-        index: 1
-        create: true
+  - select:
+      kind: Certificate
+      group: cert-manager.io
+      version: v1
+      name: proxy-serving-cert
+    fieldPaths:
+    - .spec.dnsNames.0
+    - .spec.dnsNames.1
+    options:
+      delimiter: '.'
+      index: 1
+      create: true

@@ -45,7 +45,10 @@ const ScopeAnnotation = "proxy.chrysopoeia.io/scope"
 
 const internalErrorHeader = "X-Chrysopoeia-Proxy-Error"
 const internalErrorStatusCodeHeader = "X-Chrysopoeia-Proxy-Error-Status-Code"
-const scopedListVerb = "scopedlist"
+
+// ScopedListVerb is the custom verb the proxy authorizes a scoped cluster-wide list or watch with.
+// The harness grants it to the operator, with the scope label as the resource name.
+const ScopedListVerb = "scopedlist"
 
 // New creates a new HTTP handler that proxies requests to the upstream Kubernetes API server,
 // rewriting requests and responses as necessary to enforce access control based on the scope label.
@@ -348,7 +351,7 @@ func checkCustomVerbAccess(ctx context.Context, authClient authorizationv1client
 			Groups: userInfo.Groups,
 			Extra:  extra,
 			ResourceAttributes: &authorizationv1.ResourceAttributes{
-				Verb:     scopedListVerb,
+				Verb:     ScopedListVerb,
 				Group:    group,
 				Version:  version,
 				Resource: resource,

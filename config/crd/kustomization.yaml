@@ -4,6 +4,7 @@
 resources:
 - bases/helmetica.io_customresourcedefinitionsources.yaml
 - bases/helmetica.io_instancerevisions.yaml
+- bases/helmetica.io_dependencygroups.yaml
 - bases/helmetica.io_operatorharnesses.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
