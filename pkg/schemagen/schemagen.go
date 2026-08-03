@@ -364,33 +364,6 @@ func stripComment(s string) string {
 	return strings.Join(strippedLines, "\n")
 }
 
-func downloadChart(chartRef string) (string, error) {
-	c, err := registry.NewClient()
-	if err != nil {
-		return "", err
-	}
-
-	res, err := c.Pull(chartRef,
-		registry.PullOptWithChart(true),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	cacheDir := filepath.Join(".", "cache")
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return "", err
-	}
-
-	sha := fmt.Sprintf("%x", sha256.Sum256([]byte(chartRef)))
-	filePath := filepath.Join(cacheDir, sha+".tgz")
-	if err := os.WriteFile(filePath, res.Chart.Data, 0644); err != nil {
-		return "", err
-	}
-
-	return filePath, nil
-}
-
 type generateOptions struct {
 	group string
 	names apiextv1.CustomResourceDefinitionNames
