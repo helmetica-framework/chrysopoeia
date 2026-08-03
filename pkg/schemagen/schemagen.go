@@ -50,7 +50,13 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 		return apiextv1.CustomResourceDefinition{}, fmt.Errorf("values.yaml not found in chart")
 	}
 
-	schema, err := valuesSchema(valuesYaml)
+	hints, err := collectHints(valuesYaml)
+	if err != nil {
+		return apiextv1.CustomResourceDefinition{}, err
+	}
+	fmt.Printf("Collected hints: %+v\n", hints)
+
+	schema, err := valuesSchema(valuesYaml, hints)
 	if err != nil {
 		return apiextv1.CustomResourceDefinition{}, err
 	}
@@ -232,7 +238,7 @@ func names(chart chartv2.Chart) (apiextv1.CustomResourceDefinitionNames, error) 
 	}, nil
 }
 
-func valuesSchema(rawValues []byte) (apiextv1.JSONSchemaProps, error) {
+func valuesSchema(rawValues []byte, hints map[string]hint) (apiextv1.JSONSchemaProps, error) {
 	var node yaml.Node
 	if err := yaml.Unmarshal(rawValues, &node); err != nil {
 		return apiextv1.JSONSchemaProps{}, err
@@ -249,7 +255,7 @@ func valuesSchema(rawValues []byte) (apiextv1.JSONSchemaProps, error) {
 		return apiextv1.JSONSchemaProps{}, fmt.Errorf("top-level YAML node is not a mapping")
 	}
 
-	schemaProps, err := convertYAMLNodeToJSONSchema(top, "")
+	schemaProps, err := convertYAMLNodeToJSONSchema(top, "", hints)
 	if err != nil {
 		return apiextv1.JSONSchemaProps{}, err
 	}
@@ -267,24 +273,24 @@ func valuesSchema(rawValues []byte) (apiextv1.JSONSchemaProps, error) {
 // For scalar nodes, it determines the JSON schema type based on the YAML tag and returns a JSON schema with that type.
 // The function can return a nil schema without an error if the input node is nil or the node type can't be determined.
 // In this case, the caller should handle the nil schema appropriately.
-func convertYAMLNodeToJSONSchema(node *yaml.Node, path string) (*apiextv1.JSONSchemaProps, error) {
+func convertYAMLNodeToJSONSchema(node *yaml.Node, path string, hints map[string]hint) (*apiextv1.JSONSchemaProps, error) {
 	if node == nil {
 		return nil, nil
 	}
 
 	switch node.Kind {
 	case yaml.AliasNode:
-		return convertYAMLNodeToJSONSchema(node.Alias, path)
+		return convertYAMLNodeToJSONSchema(node.Alias, path, hints)
 
 	case yaml.MappingNode:
 		props := make(map[string]apiextv1.JSONSchemaProps)
 		for i := 0; i+1 < len(node.Content); i += 2 {
 			keyNode := node.Content[i]
 			valueNode := node.Content[i+1]
-			if keyNode == nil {
+			if keyNode == nil || strings.HasPrefix(keyNode.Value, "#") {
 				continue
 			}
-			valueSchema, err := convertYAMLNodeToJSONSchema(valueNode, path+"."+keyNode.Value)
+			valueSchema, err := convertYAMLNodeToJSONSchema(valueNode, strings.Join([]string{path, escapeJSONPointer(keyNode.Value)}, "/"), hints)
 			if err != nil {
 				return nil, fmt.Errorf("at %s: %s", path, err)
 			}
@@ -303,7 +309,7 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string) (*apiextv1.JSONSc
 		var items *apiextv1.JSONSchemaProps
 		if len(node.Content) > 0 {
 			var err error
-			items, err = convertYAMLNodeToJSONSchema(node.Content[0], path+"[0]")
+			items, err = convertYAMLNodeToJSONSchema(node.Content[0], path+"/0", hints)
 			if err != nil {
 				return nil, fmt.Errorf("at %s: %s", path, err)
 			}
@@ -322,23 +328,31 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string) (*apiextv1.JSONSc
 		}, nil
 
 	case yaml.ScalarNode:
-		if node.Tag == "!!null" {
-			fmt.Fprintf(os.Stderr, "WARNING: Skipping key with non-discoverable type at %s, use yaml tags (`key: !!type`) to specify the type.\n", path)
-			return nil, nil
+		var schemaType string
+
+		hint := hints[path]
+		if hint.Type != "" {
+			schemaType = hint.Type
 		}
 
-		var schemaType string
-		switch node.Tag {
-		case "!!bool":
-			schemaType = "boolean"
-		case "!!int":
-			schemaType = "integer"
-		case "!!float":
-			schemaType = "number"
-		case "!!str":
-			schemaType = "string"
-		default:
-			return nil, fmt.Errorf("unsupported YAML scalar tag: %s", node.Tag)
+		if schemaType == "" {
+			if node.Tag == "!!null" {
+				fmt.Fprintf(os.Stderr, "WARNING: Skipping key with non-discoverable type at %s, use hints {'#KEY': {'type': 'your_type'}} to specify the type.\n", path)
+				return nil, nil
+			}
+
+			switch node.Tag {
+			case "!!bool":
+				schemaType = "boolean"
+			case "!!int":
+				schemaType = "integer"
+			case "!!float":
+				schemaType = "number"
+			case "!!str":
+				schemaType = "string"
+			default:
+				return nil, fmt.Errorf("unsupported YAML scalar tag: %s", node.Tag)
+			}
 		}
 
 		return &apiextv1.JSONSchemaProps{

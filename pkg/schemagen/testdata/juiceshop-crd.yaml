@@ -108,6 +108,10 @@ spec:
                                 type: integer
                               hookDeletePolicy:
                                 type: string
+                              sleepSeconds:
+                                type: integer
+                              ttlSecondsAfterFinished:
+                                type: integer
                             type: object
                         type: object
                       preInstall:
@@ -120,6 +124,10 @@ spec:
                                 type: integer
                               hookDeletePolicy:
                                 type: string
+                              sleepSeconds:
+                                type: integer
+                              ttlSecondsAfterFinished:
+                                type: integer
                             type: object
                         type: object
                     type: object

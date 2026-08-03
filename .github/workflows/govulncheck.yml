@@ -29,6 +29,8 @@ jobs:
 
       - name: Run govulncheck and save to file
         run: go run golang.org/x/vuln/cmd/govulncheck@latest -format sarif ./... > govulncheck.sarif
+        env:
+          GOEXPERIMENT: jsonv2
 
       - name: Upload SARIF File
         uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
