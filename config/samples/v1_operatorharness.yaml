@@ -1,0 +1,18 @@
+apiVersion: helmetica.io/v1
+kind: OperatorHarness
+metadata:
+  labels:
+    app.kubernetes.io/name: chrysopoeia
+    app.kubernetes.io/managed-by: kustomize
+  name: mariadb-operator
+spec:
+  # Only resources carrying this label are visible to the harnessed operator on cluster-scoped
+  # lists and watches through the harness proxy.
+  scopeToLabel: requires.helmetica.io/operator-mariadb
+  operator:
+    namespace: mariadb-operator
+    serviceAccounts:
+    - operator-mariadb-operator
+    # Copies the harness proxy's CA certificate to the operator's namespace and points the pods of
+    # the service accounts above at the harness proxy instead of the Kubernetes API server.
+    injectProxyConfiguration: true
