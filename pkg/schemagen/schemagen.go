@@ -300,12 +300,21 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string, hints map[string]
 			}
 		}
 
-		return &apiextv1.JSONSchemaProps{
-			Type:       "object",
-			Properties: props,
-		}, nil
+		if len(props) == 0 {
+			return nil, nil
+		} else {
+			return &apiextv1.JSONSchemaProps{
+				Type:       "object",
+				Properties: props,
+			}, nil
+		}
 
 	case yaml.SequenceNode:
+		if len(node.Content) == 0 {
+			fmt.Fprintf(os.Stderr, "WARNING: Skipping empty array with non-discoverable item type at %s.\n", path)
+			return nil, nil
+		}
+
 		var items *apiextv1.JSONSchemaProps
 		if len(node.Content) > 0 {
 			var err error
@@ -316,18 +325,20 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string, hints map[string]
 		}
 
 		if items == nil {
-			fmt.Fprintf(os.Stderr, "WARNING: Skipping array with non-discoverable item type at %s.\n", path)
 			return nil, nil
+		} else {
+			return &apiextv1.JSONSchemaProps{
+				Type: "array",
+				Items: &apiextv1.JSONSchemaPropsOrArray{
+					Schema: items,
+				},
+			}, nil
 		}
 
-		return &apiextv1.JSONSchemaProps{
-			Type: "array",
-			Items: &apiextv1.JSONSchemaPropsOrArray{
-				Schema: items,
-			},
-		}, nil
-
 	case yaml.ScalarNode:
+		if !exported(path, hints, true) {
+			return nil, nil
+		}
 		var schemaType string
 
 		hint := hints[path]

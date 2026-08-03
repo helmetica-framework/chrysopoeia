@@ -128,10 +128,19 @@ livenessProbe:
   httpGet:
     path: /
     port: http
+'#readinessProbe':
+  export: false
 readinessProbe:
   httpGet:
     path: /
     port: http
+    httpHeaders:
+    - '#name':
+        export: true
+      name: X-Readiness-Probe
+      '#value':
+        export: true
+      value: "true"
 
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
@@ -186,3 +195,15 @@ hooks:
         type: integer
       sleepSeconds:
       exitCode: 0
+
+'#private':
+  export: false
+private:
+  a:
+    b:
+      c: d
+      e: 1
+      f:
+        - 1
+        - 2
+        - 3

@@ -17,6 +17,8 @@ type hints struct {
 
 type hint struct {
 	Type string `json:"type"`
+
+	Export *bool `json:"export,omitempty"`
 }
 
 var validTypes = sets.New("boolean", "integer", "number", "string")
@@ -27,7 +29,7 @@ func (h *hint) UnmarshalJSONFrom(d *jsontext.Decoder) error {
 	if err := json.UnmarshalDecode(d, &th); err != nil {
 		return fmt.Errorf("failed to unmarshal hint: %w", err)
 	}
-	if !validTypes.Has(th.Type) {
+	if th.Type != "" && !validTypes.Has(th.Type) {
 		return fmt.Errorf("invalid hint type: %s", th.Type)
 	}
 	*h = hint(th)
@@ -71,7 +73,26 @@ func (t *hints) UnmarshalJSONFrom(d *jsontext.Decoder) error {
 			return fmt.Errorf("failed to read closing token: %w", err)
 		}
 		return nil
+	case jsontext.KindBeginArray:
+		if _, err := d.ReadToken(); err != nil { // consume '['
+			return fmt.Errorf("failed to read opening token: %w", err)
+		}
+		for i := 0; d.PeekKind() != jsontext.KindEndArray; i++ {
+			var child hints
+			if err := child.UnmarshalJSONFrom(d); err != nil {
+				return fmt.Errorf("failed to unmarshal child in array: %w", err)
+			}
+			if t.Children == nil {
+				t.Children = make(map[string]hints)
+			}
+			t.Children[fmt.Sprintf("%d", i)] = child
+		}
+		if _, err := d.ReadToken(); err != nil { // consume ']'
+			return fmt.Errorf("failed to read closing token: %w", err)
+		}
+		return nil
 	}
+
 	return d.SkipValue()
 }
 
@@ -82,6 +103,28 @@ func (t *hints) walk(path []string, f func(path []string, h *hint)) {
 	for key, child := range t.Children {
 		child.walk(append(path, key), f)
 	}
+}
+
+// export checks if the given path is marked as exported in the hints map.
+// It returns true if the path is exported, false otherwise.
+// The export property is inherited from parent paths if not explicitly set on the current path.
+func exported(path string, hints map[string]hint, defaultValue bool) bool {
+	if h, ok := hints[path]; ok && h.Export != nil {
+		return *h.Export
+	}
+	// If the current path is not explicitly marked, check parent paths.
+	for {
+		lastSlash := strings.LastIndex(path, "/")
+		if lastSlash == -1 {
+			break
+		}
+		path = path[:lastSlash]
+		if h, ok := hints[path]; ok && h.Export != nil {
+			return *h.Export
+		}
+	}
+
+	return defaultValue
 }
 
 func collectHints(rawValues []byte) (map[string]hint, error) {

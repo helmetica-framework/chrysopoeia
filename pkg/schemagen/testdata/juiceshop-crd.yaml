@@ -79,8 +79,6 @@ spec:
                   the configuration of the service. Every change to either of these
                   two fields creates a new revision of the service.
                 properties:
-                  affinity:
-                    type: object
                   autoscaling:
                     description: 'This section is for setting up autoscaling more
                       information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/'
@@ -137,9 +135,6 @@ spec:
                       Requires Gateway API resources and suitable controller installed within the cluster
                       (see: https://gateway-api.sigs.k8s.io/guides/)
                     properties:
-                      annotations:
-                        description: HTTPRoute annotations.
-                        type: object
                       enabled:
                         description: HTTPRoute enabled.
                         type: boolean
@@ -195,8 +190,6 @@ spec:
                     description: 'This block is for setting up the ingress for more
                       information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/'
                     properties:
-                      annotations:
-                        type: object
                       className:
                         type: string
                       enabled:
@@ -236,38 +229,25 @@ spec:
                   nameOverride:
                     description: This is to override the chart name.
                     type: string
-                  nodeSelector:
-                    type: object
-                  podAnnotations:
-                    description: |-
-                      This is for setting Kubernetes Annotations to a Pod.
-                      For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
-                    type: object
-                  podLabels:
-                    description: |-
-                      This is for setting Kubernetes Labels to a Pod.
-                      For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-                    type: object
-                  podSecurityContext:
-                    type: object
                   readinessProbe:
                     properties:
                       httpGet:
                         properties:
-                          path:
-                            type: string
-                          port:
-                            type: string
+                          httpHeaders:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                              type: object
+                            type: array
                         type: object
                     type: object
                   replicaCount:
                     description: 'This will set the replicaset count more information
                       can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/'
                     type: integer
-                  resources:
-                    type: object
-                  securityContext:
-                    type: object
                   service:
                     description: 'This is for setting up a service more information
                       can be found here: https://kubernetes.io/docs/concepts/services-networking/service/'
@@ -285,9 +265,6 @@ spec:
                     description: 'This section builds out the service account more
                       information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/'
                     properties:
-                      annotations:
-                        description: Annotations to add to the service account.
-                        type: object
                       automount:
                         description: Automatically mount a ServiceAccount's API credentials?
                         type: boolean
