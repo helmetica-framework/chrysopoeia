@@ -1,16 +1,13 @@
 package schemagen
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"go.yaml.in/yaml/v4"
 	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
-	"helm.sh/helm/v4/pkg/registry"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
