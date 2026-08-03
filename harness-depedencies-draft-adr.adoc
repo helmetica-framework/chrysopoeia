@@ -36,6 +36,41 @@ Both operator and service charts can reference a `DependencyGroup` CRD, which de
 [source,yaml]
 ----
 apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+  name: mariadb-crds
+spec:
+  provides: mariadb
+---
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+  name: mariadb-operator
+spec:
+  manages: mariadb # -> Scope requires.helmetica.io/mariadb
+---
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+  name: mariadb-operator-test
+spec:
+  manages: mariadb as mariadb-test # -> Scope requires.helmetica.io/mariadb-test
+---
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+  name: strimzi-operator
+spec:
+  provides: strimzi
+  manages: strimzi # -> Scope requires.helmetica.io/strimzi
+---
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+  name: mariadb-cluster
+spec:
+  requires:
+  - dependencyGroup:
+      name: mariadb # -> Scope requires.helmetica.io/mariadb
+  - dependencyGroup:
+      name: strimzi # -> Scope requires.helmetica.io/strimzi
+---
+apiVersion: helmetica.io/v1
 kind: DependencyGroup
 metadata:
   name: mariadb
