@@ -19,7 +19,7 @@ import (
 )
 
 func TestGenerateCRD_Golden(t *testing.T) {
-	chartLoader, err := loader.Loader("./testdata/juiceshop-chart")
+	chartLoader, err := loader.Loader("./testdata/charts/juiceshop-chart")
 	if err != nil {
 		t.Fatalf("Creating chart loader failed: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestGenerateCRD_Golden(t *testing.T) {
 		t.Fatalf("Failed to marshal CRD to YAML: %v", err)
 	}
 
-	if err := os.WriteFile("testdata/juiceshop-crd.yaml", yamlData, 0644); err != nil {
+	if err := os.WriteFile("testdata/charts/juiceshop-crd.yaml", yamlData, 0644); err != nil {
 		t.Fatalf("Failed to write CRD to file: %v", err)
 	}
 }
