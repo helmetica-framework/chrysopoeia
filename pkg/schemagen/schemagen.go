@@ -231,17 +231,32 @@ func valuesSchema(rawValues []byte, hints map[string]hint) (apiextv1.JSONSchemaP
 
 func convertJSONNodeTOJSONSchema(node, parent any, path []string, hints map[string]hint) (*apiextv1.JSONSchemaProps, error) {
 	hint := hints[jsonpointer(path)]
+	var lastPathElement string
+	if len(path) > 0 {
+		lastPathElement = path[len(path)-1]
+	}
 
 	switch typedNode := node.(type) {
 	case map[string]any:
 		props := make(map[string]apiextv1.JSONSchemaProps)
-		for k, v := range typedNode {
+
+		var rawProps map[string]any
+		var rawPropsFoundAt []string
+		if p := findPropertiesKeyForObject(parent, lastPathElement); p != nil {
+			rawProps = p
+			rawPropsFoundAt = append(path[:len(path)-1], "#"+lastPathElement, "properties")
+		} else {
+			rawProps = typedNode
+			rawPropsFoundAt = path
+		}
+
+		for k, v := range rawProps {
 			if strings.HasPrefix(k, "#") {
 				continue
 			}
-			vs, err := convertJSONNodeTOJSONSchema(v, typedNode, append(path, k), hints)
+			vs, err := convertJSONNodeTOJSONSchema(v, typedNode, append(rawPropsFoundAt, k), hints)
 			if err != nil {
-				return nil, fmt.Errorf("error converting to schema at path %q: %w", strings.Join(append(path, k), "/"), err)
+				return nil, fmt.Errorf("error converting to schema at path %q: %w", strings.Join(append(rawPropsFoundAt, k), "/"), err)
 			}
 			if vs != nil {
 				props[k] = *vs
@@ -260,11 +275,6 @@ func convertJSONNodeTOJSONSchema(node, parent any, path []string, hints map[stri
 
 	case []any:
 		var items *apiextv1.JSONSchemaProps
-
-		var lastPathElement string
-		if len(path) > 0 {
-			lastPathElement = path[len(path)-1]
-		}
 
 		var rawItems any
 		var rawItemsFoundAt []string
@@ -357,6 +367,28 @@ func findItemsKeyForArray(parent any, lastPathElement string) any {
 	if hmMap, ok := hm.(map[string]any); ok {
 		if items, ok := hmMap["items"]; ok {
 			return items
+		}
+	}
+	return nil
+}
+
+// findPropertiesKeyForArray returns the value of the "properties" key for an object, if it exists.
+// It looks for a hint in the parent map with the key "#<lastPathElement>" and
+// returns the value of its "properties" key if found. If not found, it returns nil.
+func findPropertiesKeyForObject(parent any, lastPathElement string) map[string]any {
+	tp, ok := parent.(map[string]any)
+	if !ok {
+		return nil
+	}
+	hm, ok := tp["#"+lastPathElement]
+	if !ok {
+		return nil
+	}
+	if hmMap, ok := hm.(map[string]any); ok {
+		if properties, ok := hmMap["properties"]; ok {
+			if propsMap, ok := properties.(map[string]any); ok {
+				return propsMap
+			}
 		}
 	}
 	return nil

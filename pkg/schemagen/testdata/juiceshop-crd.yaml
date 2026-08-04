@@ -291,6 +291,30 @@ spec:
                     description: 'This will set the replicaset count more information
                       can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/'
                     type: integer
+                  resources:
+                    description: |-
+                      We usually recommend not to specify default resources and to leave this as a conscious
+                      choice for the user. This also increases chances charts run on environments with little
+                      resources, such as Minikube. If you do want to specify resources, uncomment the following
+                      lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+                    properties:
+                      limits:
+                        properties:
+                          cpu:
+                            description: CPU limits are a big footgun and you usually
+                              don't need them.
+                            type: string
+                          memory:
+                            type: string
+                        type: object
+                      requests:
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+                        type: object
+                    type: object
                   service:
                     description: 'This is for setting up a service more information
                       can be found here: https://kubernetes.io/docs/concepts/services-networking/service/'

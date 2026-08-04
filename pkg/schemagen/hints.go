@@ -112,7 +112,8 @@ type hint struct {
 
 	Type string `json:"type"`
 
-	Items *hints `json:"items,omitempty"`
+	Items      *hints `json:"items,omitempty"`
+	Properties *hints `json:"properties,omitempty"`
 
 	Export *bool `json:"export,omitempty"`
 }
@@ -197,6 +198,9 @@ func (t *hints) walk(path []string, f func(path []string, h *hint)) {
 		f(append(path, key), &h)
 		if h.Items != nil {
 			h.Items.walk(append(path, "#"+key, "items"), f)
+		}
+		if h.Properties != nil {
+			h.Properties.walk(append(path, "#"+key, "properties"), f)
 		}
 	}
 	for key, child := range t.Children {
