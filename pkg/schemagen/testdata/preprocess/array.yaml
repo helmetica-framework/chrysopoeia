@@ -1,0 +1,21 @@
+# Volumes blabla learn kubernetes
+'#volumes':
+  items:
+    '#name': {type: string}
+    # Name names the volume and must be unique within the pod.
+    # This is used to mount the volume into containers.
+    name:
+volumes: []
+
+# Secrets blabla learn kubernetes
+secrets:
+- # Name names the secret and must be unique within the pod.
+  name: tls-secret
+
+tags: [testing]
+
+'#otherTags':
+  items:
+    '#':
+      type: string
+otherTags: []

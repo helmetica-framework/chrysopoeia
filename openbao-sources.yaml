@@ -1,0 +1,41 @@
+apiVersion: helmetica.io/v1
+kind: CustomResourceDefinitionSource
+metadata:
+  name: v0.28.openbao
+spec:
+  crdNames:
+    kind: OpenBao
+    plural: openbaos
+  reference:
+    apiVersion: source.toolkit.fluxcd.io/v1
+    kind: OCIRepository
+    name: openbao-v0-28
+  versionDiscovery:
+    reference:
+      apiVersion: image.toolkit.fluxcd.io/v1
+      kind: ImageRepository
+      name: openbao-v0-28
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: openbao-v0-28
+spec:
+  exclusionList:
+  - ^.*\.sig$
+  - ^sha256-.+$
+  image: ghcr.io/openbao/charts/openbao
+  interval: 12h
+  provider: generic
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: openbao-v0-28
+spec:
+  interval: 12h
+  provider: generic
+  ref:
+    semver: "0.28.x"
+  timeout: 60s
+  url: ghcr.io/openbao/charts/openbao

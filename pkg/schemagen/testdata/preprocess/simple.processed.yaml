@@ -1,0 +1,10 @@
+'#root':
+  description: This is a description for the root
+root:
+  '#child1':
+    description: This is a description for child1
+  child1: value1
+  '#child2':
+    type: string
+    description: This is a description for child2
+  child2: null

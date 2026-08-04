@@ -1,0 +1,7 @@
+# This is a description for the root
+root:
+  # This is a description for child1
+  child1: value1
+  # This is a description for child2
+  '#child2': {type: string}
+  child2:

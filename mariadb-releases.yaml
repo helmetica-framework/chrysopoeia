@@ -28,7 +28,7 @@ spec:
 apiVersion: v26.mariadb-cluster.helmetica-bundles.io/bundle
 kind: MariaDBCluster
 metadata:
-  name: cluster1
+  generateName: mariadb-cluster-
   namespace: default
 spec:
   approval:

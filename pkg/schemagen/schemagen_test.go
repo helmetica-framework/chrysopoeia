@@ -1,7 +1,11 @@
 package schemagen_test
 
 import (
+	"embed"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"helm.sh/helm/v4/pkg/chart/common"
@@ -39,38 +43,33 @@ func TestGenerateCRD_Golden(t *testing.T) {
 	}
 }
 
+//go:embed testdata/preprocess/*
+var preprocessTestFiles embed.FS
+
 func Test_PreprocessYAMLHints(t *testing.T) {
-	yamlData := []byte(`
-# This is a description for the root
-root:
-  # This is a description for child1
-  child1: value1
-  # This is a description for child2
-  '#child2': {type: string}
-  child2:
-`)
-
-	processedYAML, err := schemagen.PreprocessYAMLHints(yamlData)
-	require.NoError(t, err)
-	yamlData, err = kubeyaml.YAMLToJSONStrict(processedYAML)
+	files, err := fs.Glob(preprocessTestFiles, "testdata/preprocess/*.processed.yaml")
 	require.NoError(t, err)
 
-	assert.JSONEq(t, `{
-  "root": {
-    "child1": "value1",
-    "#child2": {
-      "type": "string",
-      "description": "This is a description for child2"
-    },
-    "child2": null,
-    "#child1": {
-      "description": "This is a description for child1"
-    }
-  },
-  "#root": {
-    "description": "This is a description for the root"
-  }
-}`, string(yamlData))
+	for _, processedFile := range files {
+		t.Run(strings.TrimSuffix(filepath.Base(processedFile), ".processed.yaml"), func(t *testing.T) {
+			originalFile := strings.TrimSuffix(processedFile, ".processed.yaml") + ".yaml"
+			originalData, err := preprocessTestFiles.ReadFile(originalFile)
+			require.NoError(t, err)
+
+			expectedProcessedData, err := preprocessTestFiles.ReadFile(processedFile)
+			require.NoError(t, err)
+
+			actualProcessedData, err := schemagen.PreprocessYAMLHints(originalData)
+			require.NoError(t, err)
+
+			expectedJSON, err := kubeyaml.YAMLToJSONStrict(expectedProcessedData)
+			require.NoError(t, err)
+			actualJSON, err := kubeyaml.YAMLToJSONStrict(actualProcessedData)
+			require.NoError(t, err)
+
+			assert.JSONEq(t, string(expectedJSON), string(actualJSON), "Processed YAML does not match expected for file: %s", originalFile)
+		})
+	}
 }
 
 func Test_PreprocessYAMLHints_NothingToConfigure(t *testing.T) {

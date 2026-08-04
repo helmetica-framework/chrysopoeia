@@ -48,6 +48,7 @@ func processNode(node *yaml.Node) *yaml.Node {
 	case yaml.MappingNode:
 		for i := 0; i < len(node.Content); i += 2 {
 			keyNode := node.Content[i]
+			valueNode := node.Content[i+1]
 
 			if keyNode.HeadComment != "" {
 				hintKey := strings.TrimSpace(strings.TrimPrefix(keyNode.Value, "#"))
@@ -106,11 +107,14 @@ func processNode(node *yaml.Node) *yaml.Node {
 						Value: "#" + hintKey,
 					}, hintNode)
 				}
-
-				valueNode := node.Content[i+1]
-				// Recursively process the value node
-				processNode(valueNode)
 			}
+
+			// Recursively process the value node
+			processNode(valueNode)
+		}
+	case yaml.SequenceNode:
+		for _, itemNode := range node.Content {
+			processNode(itemNode)
 		}
 	}
 
