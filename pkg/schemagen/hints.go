@@ -24,7 +24,13 @@ func PreprocessYAMLHints(yamlData []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if node.Kind != yaml.DocumentNode || len(node.Content) == 0 {
+	// A chart with nothing to configure, like a chart shipping only CRDs, has an empty or comment-only
+	// values.yaml. There are no hints to extract from it, and valuesSchema turns it into an empty
+	// schema, so it is passed through rather than rejected.
+	if len(node.Content) == 0 {
+		return yamlData, nil
+	}
+	if node.Kind != yaml.DocumentNode {
 		return nil, fmt.Errorf("invalid YAML document")
 	}
 	processedNodes := processNode(node.Content[0])
