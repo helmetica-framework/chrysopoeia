@@ -6,9 +6,10 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"go.yaml.in/yaml/v4"
 	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/utils/ptr"
+	kubeyaml "sigs.k8s.io/yaml"
 )
 
 const CRDKindAnnotation = "crd.bundle.appcat.io/kind"
@@ -216,66 +217,34 @@ func names(chart chartv2.Chart) (apiextv1.CustomResourceDefinitionNames, error) 
 }
 
 func valuesSchema(rawValues []byte, hints map[string]hint) (apiextv1.JSONSchemaProps, error) {
-	var node yaml.Node
-	if err := yaml.Unmarshal(rawValues, &node); err != nil {
+	var root map[string]any
+	if err := kubeyaml.UnmarshalStrict(rawValues, &root); err != nil {
 		return apiextv1.JSONSchemaProps{}, err
 	}
 
-	if len(node.Content) == 0 {
-		return apiextv1.JSONSchemaProps{}, nil
-	}
-	if len(node.Content) > 1 {
-		return apiextv1.JSONSchemaProps{}, fmt.Errorf("multiple YAML documents found")
-	}
-	top := node.Content[0] // Unwrap the document node
-	if top.Kind != yaml.MappingNode {
-		return apiextv1.JSONSchemaProps{}, fmt.Errorf("top-level YAML node is not a mapping")
-	}
-
-	schemaProps, err := convertYAMLNodeToJSONSchema(top, "", hints)
+	schemaProps, err := convertJSONNodeTOJSONSchema(root, nil, []string{}, hints)
 	if err != nil {
 		return apiextv1.JSONSchemaProps{}, err
 	}
-	if schemaProps == nil {
-		return apiextv1.JSONSchemaProps{}, fmt.Errorf("top-level YAML node returned nil schema")
-	}
-	return *schemaProps, nil
+	return ptr.Deref(schemaProps, apiextv1.JSONSchemaProps{}), nil
 }
 
-// convertYAMLNodeToJSONSchema converts a YAML node to a JSON schema.
-// The path parameter is used for error reporting and should be the path to the current node in the YAML document.
-// The function handles mapping nodes, sequence nodes, and scalar nodes. It also handles alias nodes by resolving them to their target node.
-// For mapping nodes, it recursively converts each key-value pair to a JSON schema property.
-// For sequence nodes, it converts the first element to a JSON schema item and assumes that all elements are of the same type.
-// For scalar nodes, it determines the JSON schema type based on the YAML tag and returns a JSON schema with that type.
-// The function can return a nil schema without an error if the input node is nil or the node type can't be determined.
-// In this case, the caller should handle the nil schema appropriately.
-func convertYAMLNodeToJSONSchema(node *yaml.Node, path string, hints map[string]hint) (*apiextv1.JSONSchemaProps, error) {
-	if node == nil {
-		return nil, nil
-	}
+func convertJSONNodeTOJSONSchema(node, parent any, path []string, hints map[string]hint) (*apiextv1.JSONSchemaProps, error) {
+	hint := hints[jsonpointer(path)]
 
-	switch node.Kind {
-	case yaml.AliasNode:
-		return convertYAMLNodeToJSONSchema(node.Alias, path, hints)
-
-	case yaml.MappingNode:
+	switch typedNode := node.(type) {
+	case map[string]any:
 		props := make(map[string]apiextv1.JSONSchemaProps)
-		for i := 0; i+1 < len(node.Content); i += 2 {
-			keyNode := node.Content[i]
-			valueNode := node.Content[i+1]
-			if keyNode == nil || strings.HasPrefix(keyNode.Value, "#") {
+		for k, v := range typedNode {
+			if strings.HasPrefix(k, "#") {
 				continue
 			}
-			valueSchema, err := convertYAMLNodeToJSONSchema(valueNode, strings.Join([]string{path, escapeJSONPointer(keyNode.Value)}, "/"), hints)
+			vs, err := convertJSONNodeTOJSONSchema(v, typedNode, append(path, k), hints)
 			if err != nil {
-				return nil, fmt.Errorf("at %s: %s", path, err)
+				return nil, fmt.Errorf("error converting to schema at path %q: %w", strings.Join(append(path, k), "/"), err)
 			}
-			if valueSchema != nil {
-				if hint, ok := hints[strings.Join([]string{path, escapeJSONPointer(keyNode.Value)}, "/")]; ok && hint.Description != "" {
-					valueSchema.Description = hint.Description
-				}
-				props[keyNode.Value] = *valueSchema
+			if vs != nil {
+				props[k] = *vs
 			}
 		}
 
@@ -283,74 +252,114 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string, hints map[string]
 			return nil, nil
 		} else {
 			return &apiextv1.JSONSchemaProps{
-				Type:       "object",
-				Properties: props,
+				Description: hint.Description,
+				Type:        "object",
+				Properties:  props,
 			}, nil
 		}
 
-	case yaml.SequenceNode:
-		if len(node.Content) == 0 {
-			fmt.Fprintf(os.Stderr, "WARNING: Skipping empty array with non-discoverable item type at %s.\n", path)
+	case []any:
+		var items *apiextv1.JSONSchemaProps
+
+		var lastPathElement string
+		if len(path) > 0 {
+			lastPathElement = path[len(path)-1]
+		}
+
+		var rawItems any
+		var rawItemsFoundAt []string
+		if itms := findItemsKeyForArray(parent, lastPathElement); itms != nil {
+			rawItems = itms
+			rawItemsFoundAt = append(path[:len(path)-1], "#"+lastPathElement, "items")
+		} else if len(typedNode) > 0 {
+			rawItems = typedNode[0]
+			rawItemsFoundAt = append(path, "0")
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: Skipping empty array with non-discoverable item type at %s.\n", strings.Join(path, "/"))
 			return nil, nil
 		}
 
-		var items *apiextv1.JSONSchemaProps
-		if len(node.Content) > 0 {
-			var err error
-			items, err = convertYAMLNodeToJSONSchema(node.Content[0], path+"/0", hints)
-			if err != nil {
-				return nil, fmt.Errorf("at %s: %s", path, err)
-			}
+		if itms, err := convertJSONNodeTOJSONSchema(rawItems, typedNode, rawItemsFoundAt, hints); err != nil {
+			return nil, fmt.Errorf("error converting to schema at path %q: %w", strings.Join(rawItemsFoundAt, "/"), err)
+		} else {
+			items = itms
 		}
 
 		if items == nil {
 			return nil, nil
 		} else {
 			return &apiextv1.JSONSchemaProps{
-				Type: "array",
+				Description: hint.Description,
+				Type:        "array",
 				Items: &apiextv1.JSONSchemaPropsOrArray{
 					Schema: items,
 				},
 			}, nil
 		}
-
-	case yaml.ScalarNode:
-		if !exported(path, hints, true) {
+	case string:
+		if exported := exported(jsonpointer(path), hints, true); !exported {
 			return nil, nil
-		}
-		var schemaType string
-
-		hint := hints[path]
-		if hint.Type != "" {
-			schemaType = hint.Type
-		}
-
-		if schemaType == "" {
-			if node.Tag == "!!null" {
-				fmt.Fprintf(os.Stderr, "WARNING: Skipping key with non-discoverable type at %s, use hints {'#KEY': {'type': 'your_type'}} to specify the type.\n", path)
-				return nil, nil
-			}
-
-			switch node.Tag {
-			case "!!bool":
-				schemaType = "boolean"
-			case "!!int":
-				schemaType = "integer"
-			case "!!float":
-				schemaType = "number"
-			case "!!str":
-				schemaType = "string"
-			default:
-				return nil, fmt.Errorf("unsupported YAML scalar tag: %s", node.Tag)
-			}
 		}
 
 		return &apiextv1.JSONSchemaProps{
-			Type: schemaType,
+			Description: hint.Description,
+			Type:        "string",
+		}, nil
+	case float64:
+		if exported := exported(jsonpointer(path), hints, true); !exported {
+			return nil, nil
+		}
+
+		return &apiextv1.JSONSchemaProps{
+			Description: hint.Description,
+			Type:        "integer",
+		}, nil
+	case bool:
+		if exported := exported(jsonpointer(path), hints, true); !exported {
+			return nil, nil
+		}
+
+		return &apiextv1.JSONSchemaProps{
+			Description: hint.Description,
+			Type:        "boolean",
+		}, nil
+	case nil:
+		if exported := exported(jsonpointer(path), hints, true); !exported {
+			return nil, nil
+		}
+
+		if hint.Type == "" {
+			fmt.Fprintf(os.Stderr, "WARNING: Skipping key with non-discoverable type at %s, use hints {'#KEY': {'type': 'your_type'}} to specify the type.\n", strings.Join(path, "/"))
+			return nil, nil
+		}
+
+		return &apiextv1.JSONSchemaProps{
+			Description: hint.Description,
+			Type:        hint.Type,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported YAML node kind: %v", node.Kind)
+		return nil, fmt.Errorf("unknown type: %T", node)
 	}
+}
+
+// findItemsKeyForArray returns the value of the "items" key for an array, if it exists.
+// It looks for a hint in the parent map with the key "#<lastPathElement>" and
+// returns the value of its "items" key if found. If not found, it returns nil.
+func findItemsKeyForArray(parent any, lastPathElement string) any {
+	tp, ok := parent.(map[string]any)
+	if !ok {
+		return nil
+	}
+	hm, ok := tp["#"+lastPathElement]
+	if !ok {
+		return nil
+	}
+	if hmMap, ok := hm.(map[string]any); ok {
+		if items, ok := hmMap["items"]; ok {
+			return items
+		}
+	}
+	return nil
 }
 
 // dependencyReferences is the schema of a list of references to a DependencyGroup. The scope the

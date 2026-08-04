@@ -195,6 +195,9 @@ func (t *hints) UnmarshalJSONFrom(d *jsontext.Decoder) error {
 func (t *hints) walk(path []string, f func(path []string, h *hint)) {
 	for key, h := range t.Hints {
 		f(append(path, key), &h)
+		if h.Items != nil {
+			h.Items.walk(append(path, "#"+key, "items"), f)
+		}
 	}
 	for key, child := range t.Children {
 		child.walk(append(path, key), f)

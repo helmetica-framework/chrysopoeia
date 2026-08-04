@@ -332,6 +332,21 @@ spec:
                           type: string
                       type: object
                     type: array
+                  volumeMounts:
+                    description: Additional volumeMounts on the output Deployment
+                      definition.
+                    items:
+                      properties:
+                        mountPath:
+                          type: string
+                        name:
+                          type: string
+                        readOnly:
+                          description: readOnly defines whether the volume is mounted
+                            read-only. Defaults to false (read/write).
+                          type: boolean
+                      type: object
+                    type: array
                 type: object
               version:
                 description: The version of the service. Every change to this field

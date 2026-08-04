@@ -5,6 +5,8 @@
     # Name names the volume and must be unique within the pod.
     # This is used to mount the volume into containers.
     name:
+    # Type does not really exists just for testing
+    type: Secret
 volumes: []
 
 # Secrets blabla learn kubernetes

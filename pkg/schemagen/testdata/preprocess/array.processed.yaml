@@ -7,6 +7,10 @@
         This is used to mount the volume into containers.
       type: string
     name:
+    '#type':
+      description: |-
+        Type does not really exists just for testing
+    type: Secret
 volumes: []
 
 '#secrets':

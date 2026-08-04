@@ -158,6 +158,12 @@ volumes: []
   #     optional: false
 
 # Additional volumeMounts on the output Deployment definition.
+'#volumeMounts':
+  items:
+    name: !!str
+    mountPath: !!str
+    # readOnly defines whether the volume is mounted read-only. Defaults to false (read/write).
+    readOnly: false
 volumeMounts: []
   # - name: foo
   #   mountPath: "/etc/foo"
