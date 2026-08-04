@@ -4,8 +4,10 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
+	"slices"
 	"strings"
 
+	"go.yaml.in/yaml/v4"
 	"k8s.io/apimachinery/pkg/util/sets"
 	kubeyaml "sigs.k8s.io/yaml"
 )
@@ -15,7 +17,103 @@ type hints struct {
 	Hints    map[string]hint  `json:"hint,omitempty"`
 }
 
+// PreprocessYAMLWithHints preprocesses the given YAML input, extracting the [hint.Description] from the comment on the node and add them to the hint.
+func PreprocessYAMLHints(yamlData []byte) ([]byte, error) {
+	var node yaml.Node
+	if err := yaml.Unmarshal(yamlData, &node); err != nil {
+		return nil, err
+	}
+
+	if node.Kind != yaml.DocumentNode || len(node.Content) == 0 {
+		return nil, fmt.Errorf("invalid YAML document")
+	}
+	processedNodes := processNode(node.Content[0])
+
+	modifiedYAML, err := yaml.Marshal(processedNodes)
+	if err != nil {
+		return nil, err
+	}
+
+	return modifiedYAML, nil
+}
+
+func processNode(node *yaml.Node) *yaml.Node {
+	switch node.Kind {
+	case yaml.MappingNode:
+		for i := 0; i < len(node.Content); i += 2 {
+			keyNode := node.Content[i]
+
+			if keyNode.HeadComment != "" {
+				hintKey := strings.TrimSpace(strings.TrimPrefix(keyNode.Value, "#"))
+				hintDescription := stripComment(keyNode.HeadComment)
+
+				hintNodeIdx := slices.IndexFunc(node.Content, func(n *yaml.Node) bool {
+					return n.Kind == yaml.ScalarNode && n.Value == "#"+hintKey
+				})
+
+				if hintNodeIdx != -1 {
+					// If a hint node already exists, update its description
+					hintNode := node.Content[hintNodeIdx+1]
+					if hintNode.Kind == yaml.MappingNode {
+						descriptionNodeIdx := slices.IndexFunc(hintNode.Content, func(n *yaml.Node) bool {
+							return n.Kind == yaml.ScalarNode && n.Value == "description"
+						})
+						if descriptionNodeIdx != -1 {
+							hintNode.Content[descriptionNodeIdx+1].Value = hintDescription
+						} else {
+							// Add a new description node if it doesn't exist
+							hintNode.Content = append(hintNode.Content, &yaml.Node{
+								Kind:  yaml.ScalarNode,
+								Tag:   "!!str",
+								Value: "description",
+							}, &yaml.Node{
+								Kind:  yaml.ScalarNode,
+								Tag:   "!!str",
+								Value: hintDescription,
+							})
+						}
+					}
+				} else {
+					// Create a new hint node and add it to the mapping
+					hintNode := &yaml.Node{
+						Kind:  yaml.MappingNode,
+						Tag:   "!!map",
+						Value: "",
+						Content: []*yaml.Node{
+							{
+								Kind:  yaml.ScalarNode,
+								Tag:   "!!str",
+								Value: "description",
+							},
+							{
+								Kind:  yaml.ScalarNode,
+								Tag:   "!!str",
+								Value: hintDescription,
+							},
+						},
+					}
+
+					// Add the hint node to the mapping with the hint key
+					node.Content = append(node.Content, &yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Tag:   "!!str",
+						Value: "#" + hintKey,
+					}, hintNode)
+				}
+
+				valueNode := node.Content[i+1]
+				// Recursively process the value node
+				processNode(valueNode)
+			}
+		}
+	}
+
+	return node
+}
+
 type hint struct {
+	Description string `json:"description,omitempty"`
+
 	Type string `json:"type"`
 
 	Export *bool `json:"export,omitempty"`

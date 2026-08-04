@@ -8,6 +8,8 @@ import (
 	kubeyaml "sigs.k8s.io/yaml"
 
 	"github.com/helmetica-framework/chrysopoeia/pkg/schemagen"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateCRD_Golden(t *testing.T) {
@@ -33,4 +35,38 @@ func TestGenerateCRD_Golden(t *testing.T) {
 	if err := os.WriteFile("testdata/juiceshop-crd.yaml", yamlData, 0644); err != nil {
 		t.Fatalf("Failed to write CRD to file: %v", err)
 	}
+}
+
+func Test_PreprocessYAMLHints(t *testing.T) {
+	yamlData := []byte(`
+# This is a description for the root
+root:
+  # This is a description for child1
+  child1: value1
+  # This is a description for child2
+  '#child2': {type: string}
+  child2:
+`)
+
+	processedYAML, err := schemagen.PreprocessYAMLHints(yamlData)
+	require.NoError(t, err)
+	yamlData, err = kubeyaml.YAMLToJSONStrict(processedYAML)
+	require.NoError(t, err)
+
+	assert.JSONEq(t, `{
+  "root": {
+    "child1": "value1",
+    "#child2": {
+      "type": "string",
+      "description": "This is a description for child2"
+    },
+    "child2": null,
+    "#child1": {
+      "description": "This is a description for child1"
+    }
+  },
+  "#root": {
+    "description": "This is a description for the root"
+  }
+}`, string(yamlData))
 }

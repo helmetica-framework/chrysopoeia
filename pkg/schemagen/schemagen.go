@@ -50,11 +50,15 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 		return apiextv1.CustomResourceDefinition{}, fmt.Errorf("values.yaml not found in chart")
 	}
 
+	valuesYaml, err := PreprocessYAMLHints(valuesYaml)
+	if err != nil {
+		return apiextv1.CustomResourceDefinition{}, fmt.Errorf("Failed to pre-process YAML: %w", err)
+	}
+
 	hints, err := collectHints(valuesYaml)
 	if err != nil {
 		return apiextv1.CustomResourceDefinition{}, err
 	}
-	fmt.Printf("Collected hints: %+v\n", hints)
 
 	schema, err := valuesSchema(valuesYaml, hints)
 	if err != nil {
@@ -295,7 +299,9 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string, hints map[string]
 				return nil, fmt.Errorf("at %s: %s", path, err)
 			}
 			if valueSchema != nil {
-				valueSchema.Description = stripComment(keyNode.HeadComment)
+				if hint, ok := hints[strings.Join([]string{path, escapeJSONPointer(keyNode.Value)}, "/")]; ok && hint.Description != "" {
+					valueSchema.Description = hint.Description
+				}
 				props[keyNode.Value] = *valueSchema
 			}
 		}
