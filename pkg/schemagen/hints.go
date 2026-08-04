@@ -4,7 +4,6 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
-	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v4"
@@ -50,66 +49,21 @@ func processNode(node *yaml.Node) *yaml.Node {
 			keyNode := node.Content[i]
 			valueNode := node.Content[i+1]
 
+			hintKey := "#" + strings.TrimPrefix(keyNode.Value, "#")
+
+			// Add description hint if present
 			if keyNode.HeadComment != "" {
-				hintKey := strings.TrimSpace(strings.TrimPrefix(keyNode.Value, "#"))
 				hintDescription := stripComment(keyNode.HeadComment)
-
-				hintNodeIdx := slices.IndexFunc(node.Content, func(n *yaml.Node) bool {
-					return n.Kind == yaml.ScalarNode && n.Value == "#"+hintKey
-				})
-
-				if hintNodeIdx != -1 {
-					// If a hint node already exists, update its description
-					hintNode := node.Content[hintNodeIdx+1]
-					if hintNode.Kind == yaml.MappingNode {
-						descriptionNodeIdx := slices.IndexFunc(hintNode.Content, func(n *yaml.Node) bool {
-							return n.Kind == yaml.ScalarNode && n.Value == "description"
-						})
-						if descriptionNodeIdx != -1 {
-							hintNode.Content[descriptionNodeIdx+1].Value = hintDescription
-						} else {
-							// Add a new description node if it doesn't exist
-							hintNode.Content = append(hintNode.Content, &yaml.Node{
-								Kind:  yaml.ScalarNode,
-								Tag:   "!!str",
-								Value: "description",
-							}, &yaml.Node{
-								Kind:  yaml.ScalarNode,
-								Tag:   "!!str",
-								Value: hintDescription,
-							})
-						}
-					}
-				} else {
-					// Create a new hint node and add it to the mapping
-					hintNode := &yaml.Node{
-						Kind:  yaml.MappingNode,
-						Tag:   "!!map",
-						Value: "",
-						Content: []*yaml.Node{
-							{
-								Kind:  yaml.ScalarNode,
-								Tag:   "!!str",
-								Value: "description",
-							},
-							{
-								Kind:  yaml.ScalarNode,
-								Tag:   "!!str",
-								Value: hintDescription,
-							},
-						},
-					}
-
-					// Add the hint node to the mapping with the hint key
-					node.Content = append(node.Content, &yaml.Node{
-						Kind:  yaml.ScalarNode,
-						Tag:   "!!str",
-						Value: "#" + hintKey,
-					}, hintNode)
+				hintNode := ensureHintMappingNode(hintKey, &node.Content)
+				if hintNode.Kind == yaml.MappingNode {
+					descriptionNode := ensureNodeAtKey(&hintNode.Content, "description", &yaml.Node{
+						Kind: yaml.ScalarNode,
+						Tag:  "!!str",
+					})
+					descriptionNode.Value = hintDescription
 				}
 			}
 
-			// Recursively process the value node
 			processNode(valueNode)
 		}
 	case yaml.SequenceNode:
@@ -121,10 +75,44 @@ func processNode(node *yaml.Node) *yaml.Node {
 	return node
 }
 
+// ensureHintMappingNode ensures that a mapping node for the given hint key exists in the content slice.
+// If it exists, it returns the existing mapping node. If it does not exist, it creates a new mapping node,
+// appends it to the content slice, and returns the newly created mapping node.
+func ensureHintMappingNode(hintKey string, content *[]*yaml.Node) *yaml.Node {
+	return ensureNodeAtKey(content, hintKey, &yaml.Node{
+		Kind:    yaml.MappingNode,
+		Tag:     "!!map",
+		Content: []*yaml.Node{},
+	})
+}
+
+// ensureNodeAtKey ensures that a node for the given key exists in the content slice.
+// If it exists, it returns the existing node. If it does not exist, it appends the given value node
+// to the content slice and returns it.
+// Modifies the content slice in place.
+func ensureNodeAtKey(content *[]*yaml.Node, key string, value *yaml.Node) *yaml.Node {
+	for i := 0; i < len(*content); i += 2 {
+		keyNode := (*content)[i]
+		if keyNode.Kind == yaml.ScalarNode && keyNode.Value == key {
+			return (*content)[i+1]
+		}
+	}
+	// If the hint key does not exist, add it with an empty mapping node
+	*content = append(*content, &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Tag:   "!!str",
+		Value: key,
+	}, value)
+
+	return value
+}
+
 type hint struct {
 	Description string `json:"description,omitempty"`
 
 	Type string `json:"type"`
+
+	Items *hints `json:"items,omitempty"`
 
 	Export *bool `json:"export,omitempty"`
 }
