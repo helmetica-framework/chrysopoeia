@@ -278,6 +278,15 @@ func runController(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("unable to create RBACAggregatorManager controller: %w", err)
 	}
 
+	dgm := &controllers.DependencyGroupManager{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder("dependency-group-manager"),
+	}
+	if err := dgm.SetupWithManager("dependency-group-manager", mgr); err != nil {
+		return fmt.Errorf("unable to create DependencyGroupManager controller: %w", err)
+	}
+
 	drm := &controllers.DependencyRBACManager{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),

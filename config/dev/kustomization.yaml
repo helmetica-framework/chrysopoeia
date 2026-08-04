@@ -1,0 +1,32 @@
+# Runs the controller in the cluster instead of on the developer's machine, which the OperatorHarness
+# needs: the API server has to reach the pod mutating webhook through a service, and it cannot reach a
+# process in the devcontainer.
+#
+#   make build.docker IMG_TAG=dev
+#   go tool sigs.k8s.io/kind load docker-image ghcr.io/helmetica-framework/chrysopoeia:dev --name athanor
+#   go tool sigs.k8s.io/kustomize/kustomize/v5 build config/dev | kubectl apply --server-side -f -
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../default
+
+images:
+- name: ghcr.io/helmetica-framework/chrysopoeia
+  newTag: dev
+
+patches:
+- target:
+    kind: Deployment
+  patch: |
+    - op: test
+      path: /spec/template/spec/containers/0/name
+      value: manager
+    # The image is loaded into the kind node, there is no registry to pull it from.
+    - op: add
+      path: /spec/template/spec/containers/0/imagePullPolicy
+      value: IfNotPresent
+    # Flux runs in chrysopoeia-flux-system here, not in the upstream image-reflector-system.
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --image-reflector-controller-hostname=image-reflector-controller-tags.chrysopoeia-flux-system.svc:8090

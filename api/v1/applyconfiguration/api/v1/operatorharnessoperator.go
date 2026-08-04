@@ -10,7 +10,9 @@ type OperatorHarnessOperatorApplyConfiguration struct {
 	// Namespace is the namespace the harnessed operator runs in.
 	Namespace *string `json:"namespace,omitempty"`
 	// ServiceAccounts are the service accounts, in Namespace, the harnessed operator's pods run as.
-	// Only pods running as one of these service accounts are harnessed.
+	// Only pods running as one of these service accounts are harnessed. If empty, every pod in
+	// Namespace is harnessed, which is what a namespace holding a single operator wants: the service
+	// account is named by the operator's chart and does not have to be known up front.
 	ServiceAccounts []string `json:"serviceAccounts,omitempty"`
 	// InjectProxyConfiguration defines if the harnessed operator should have the harness proxy injected.
 	// If enabled, the harness copies the proxy's CA certificate to Namespace and registers a mutating

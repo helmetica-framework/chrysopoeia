@@ -21,21 +21,57 @@ type CustomResourceDefinitionSourceSpec struct {
 	// +optional
 	VersionDiscovery VersionDiscovery `json:"versionDiscovery,omitempty"`
 
-	// Provides is a list of dependencies that this CRD provides.
+	// Provides lists the DependencyGroups whose CRDs the chart of this source ships. It grants the
+	// chart write access to those CRDs and lets Helm install them; it says nothing about who operates
+	// them, that is Manages. Exactly one source may provide a group, otherwise two charts install the
+	// same CRDs over each other. An operator that bundles its CRDs provides and manages the group,
+	// while an operator whose CRDs come in a chart of their own only manages it.
+	// +kubebuilder:validation:XValidation:rule="self.all(x, !has(x.dependencyGroup.as))",message="as must not be set on provides, the CRDs of a group are the same for every consumer"
 	// +optional
-	Provides []Dependency `json:"provides,omitempty"`
+	Provides []DependencyReference `json:"provides,omitempty"`
 
-	// Requires is a list of dependencies that this CRD requires.
+	// Manages declares that this source deploys the operator managing the CRDs of a DependencyGroup.
+	// The instance of a managing source is the provider consumers are wired to: it is harnessed to the
+	// group's scope and granted access to the namespaces that require the group.
+	// A single group can be managed: the harness proxy scopes a cluster-scoped list to one label, and
+	// a label selector cannot express "carries either label".
+	// +kubebuilder:validation:MaxItems=1
 	// +optional
-	Requires []Dependency `json:"requires,omitempty"`
+	Manages []DependencyReference `json:"manages,omitempty"`
+
+	// Requires lists the DependencyGroups that instances of this source consume.
+	// +optional
+	Requires []DependencyReference `json:"requires,omitempty"`
 }
 
-type Dependency struct {
-	// Name of the dependency.
-	// Should be the fully qualified crd name as written in the .metadata.name field of the CRD.
+// DependencyReference references a dependency. Exactly one referent has to be set.
+// +kubebuilder:validation:XValidation:rule="has(self.dependencyGroup)",message="dependencyGroup must be set"
+type DependencyReference struct {
+	// DependencyGroup references a DependencyGroup.
+	// +optional
+	DependencyGroup *DependencyGroupReference `json:"dependencyGroup,omitempty"`
+}
+
+// DependencyGroupReference references a DependencyGroup and names the scope it is used under.
+type DependencyGroupReference struct {
+	// Name of the DependencyGroup.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Name string `json:"name"`
+
+	// As overrides the name the scope label is built from, so that a second deployment of the same
+	// operator can serve a separate set of consumers. Both the managing operator and its consumers
+	// have to set the same alias to end up in the same scope.
+	// +optional
+	As string `json:"as,omitempty"`
+}
+
+// ScopeName returns the name the scope label of the referenced group is built from.
+func (r DependencyGroupReference) ScopeName() string {
+	if r.As != "" {
+		return r.As
+	}
+	return r.Name
 }
 
 type SourceReference struct {

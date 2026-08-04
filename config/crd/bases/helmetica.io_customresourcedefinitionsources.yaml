@@ -103,20 +103,75 @@ spec:
                 - kind
                 - plural
                 type: object
-              provides:
-                description: Provides is a list of dependencies that this CRD provides.
+              manages:
+                description: |-
+                  Manages declares that this source deploys the operator managing the CRDs of a DependencyGroup.
+                  The instance of a managing source is the provider consumers are wired to: it is harnessed to the
+                  group's scope and granted access to the namespaces that require the group.
+                  A single group can be managed: the harness proxy scopes a cluster-scoped list to one label, and
+                  a label selector cannot express "carries either label".
                 items:
+                  description: DependencyReference references a dependency. Exactly
+                    one referent has to be set.
                   properties:
-                    name:
-                      description: |-
-                        Name of the dependency.
-                        Should be the fully qualified crd name as written in the .metadata.name field of the CRD.
-                      minLength: 1
-                      type: string
-                  required:
-                  - name
+                    dependencyGroup:
+                      description: DependencyGroup references a DependencyGroup.
+                      properties:
+                        as:
+                          description: |-
+                            As overrides the name the scope label is built from, so that a second deployment of the same
+                            operator can serve a separate set of consumers. Both the managing operator and its consumers
+                            have to set the same alias to end up in the same scope.
+                          type: string
+                        name:
+                          description: Name of the DependencyGroup.
+                          minLength: 1
+                          type: string
+                      required:
+                      - name
+                      type: object
                   type: object
+                  x-kubernetes-validations:
+                  - message: dependencyGroup must be set
+                    rule: has(self.dependencyGroup)
+                maxItems: 1
                 type: array
+              provides:
+                description: |-
+                  Provides lists the DependencyGroups whose CRDs the chart of this source ships. It grants the
+                  chart write access to those CRDs and lets Helm install them; it says nothing about who operates
+                  them, that is Manages. Exactly one source may provide a group, otherwise two charts install the
+                  same CRDs over each other. An operator that bundles its CRDs provides and manages the group,
+                  while an operator whose CRDs come in a chart of their own only manages it.
+                items:
+                  description: DependencyReference references a dependency. Exactly
+                    one referent has to be set.
+                  properties:
+                    dependencyGroup:
+                      description: DependencyGroup references a DependencyGroup.
+                      properties:
+                        as:
+                          description: |-
+                            As overrides the name the scope label is built from, so that a second deployment of the same
+                            operator can serve a separate set of consumers. Both the managing operator and its consumers
+                            have to set the same alias to end up in the same scope.
+                          type: string
+                        name:
+                          description: Name of the DependencyGroup.
+                          minLength: 1
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  type: object
+                  x-kubernetes-validations:
+                  - message: dependencyGroup must be set
+                    rule: has(self.dependencyGroup)
+                type: array
+                x-kubernetes-validations:
+                - message: as must not be set on provides, the CRDs of a group are
+                    the same for every consumer
+                  rule: self.all(x, !has(x.dependencyGroup.as))
               reference:
                 description: Reference is a reference to the source of the bundle.
                 properties:
@@ -139,18 +194,32 @@ spec:
                 - name
                 type: object
               requires:
-                description: Requires is a list of dependencies that this CRD requires.
+                description: Requires lists the DependencyGroups that instances of
+                  this source consume.
                 items:
+                  description: DependencyReference references a dependency. Exactly
+                    one referent has to be set.
                   properties:
-                    name:
-                      description: |-
-                        Name of the dependency.
-                        Should be the fully qualified crd name as written in the .metadata.name field of the CRD.
-                      minLength: 1
-                      type: string
-                  required:
-                  - name
+                    dependencyGroup:
+                      description: DependencyGroup references a DependencyGroup.
+                      properties:
+                        as:
+                          description: |-
+                            As overrides the name the scope label is built from, so that a second deployment of the same
+                            operator can serve a separate set of consumers. Both the managing operator and its consumers
+                            have to set the same alias to end up in the same scope.
+                          type: string
+                        name:
+                          description: Name of the DependencyGroup.
+                          minLength: 1
+                          type: string
+                      required:
+                      - name
+                      type: object
                   type: object
+                  x-kubernetes-validations:
+                  - message: dependencyGroup must be set
+                    rule: has(self.dependencyGroup)
                 type: array
               versionDiscovery:
                 description: VersionDiscovery defines how to discover the version

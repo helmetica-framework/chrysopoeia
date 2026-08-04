@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
+	chrysopoeiav1ac "github.com/helmetica-framework/chrysopoeia/api/v1/applyconfiguration/api/v1"
 )
 
 type ReleaseController struct {
@@ -47,6 +48,8 @@ type ReleaseController struct {
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;roles;rolebindings;clusterrolebindings,verbs=get;list;watch;create;update;patch
 
 //+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch
+//+kubebuilder:rbac:groups=helmetica.io,resources=dependencygroups,verbs=get;list;watch
+//+kubebuilder:rbac:groups=helmetica.io,resources=operatorharnesses,verbs=get;list;watch;create;update;patch;delete;deletecollection
 
 //+kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update;patch;create
 
@@ -160,6 +163,13 @@ func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName strin
 	if err := r.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: helmNSName}}); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
+
+	// The harness of an operator instance is cluster-scoped, so the garbage collector does not remove
+	// it with the instance namespace.
+	if err := r.DeleteAllOf(ctx, &chrysopoeiav1.OperatorHarness{},
+		client.MatchingLabels{operatorHarnessInstanceNamespaceLabel: helmNSName}); err != nil {
+		return fmt.Errorf("unable to delete the OperatorHarness of %s: %w", helmNSName, err)
+	}
 	return nil
 }
 
@@ -180,28 +190,51 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	}
 
 	requires := extractRequires(instance)
-	for _, r := range requires {
-		commonLabels[fmt.Sprintf("requires.helmetica.io/%s", r)] = ""
+	for _, ref := range requires {
+		commonLabels[RequiresLabelPrefix+ref.ScopeName()] = ""
 	}
 
+	// `provides` only says that the chart ships the CRDs of a group, which is a chart of its own if the
+	// operator does not bundle them. The provider label is what consumers are granted access to and
+	// what the harness scopes, so it names the operator instance: it follows `manages`.
 	provides := extractProvides(instance)
 	isProvider := len(provides) > 0
-	for _, p := range provides {
-		commonLabels[fmt.Sprintf("provides.helmetica.io/%s", p)] = ""
+
+	manages := extractManages(instance)
+	for _, ref := range manages {
+		commonLabels[ProvidesLabelPrefix+ref.ScopeName()] = ""
+	}
+
+	if err := r.ensureOperatorHarness(ctx, instance, helmNSName, commonAnnotations, commonLabels, ownerOpt); err != nil {
+		return fmt.Errorf("unable to ensure the OperatorHarness: %w", err)
+	}
+
+	// The scope labels name dependency groups, the RBAC below needs the CRDs they bundle.
+	providedCRDs, err := r.resolveGroupCRDs(ctx, provides)
+	if err != nil {
+		return fmt.Errorf("unable to resolve provided dependency groups: %w", err)
+	}
+	requiredCRDs, err := r.resolveGroupCRDs(ctx, requires)
+	if err != nil {
+		return fmt.Errorf("unable to resolve required dependency groups: %w", err)
 	}
 
 	providerRoleName := strings.Join([]string{"chrysopoeia", "provider", helmNSName}, ":")
 	cr := rbacv1ac.
 		ClusterRole(providerRoleName).
 		WithAnnotations(commonAnnotations).
-		WithLabels(commonLabels).
-		WithRules(
+		WithLabels(commonLabels)
+	// An empty resourceNames list matches every CRD in RBAC, so an instance that ships no CRDs gets no
+	// rule at all instead of write access to all of them.
+	if len(providedCRDs) > 0 {
+		cr = cr.WithRules(
 			rbacv1ac.PolicyRule().
 				WithAPIGroups("apiextensions.k8s.io").
 				WithResources("customresourcedefinitions").
-				WithResourceNames(provides...).
+				WithResourceNames(providedCRDs...).
 				WithVerbs("*"),
 		)
+	}
 	if err := r.Apply(ctx, cr, ownerOpt); err != nil {
 		return err
 	}
@@ -265,11 +298,11 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 
-	rbacRequires := make([]*rbacv1ac.PolicyRuleApplyConfiguration, 0, len(requires))
-	for _, r := range requires {
-		resource, group, found := strings.Cut(r, ".")
+	rbacRequires := make([]*rbacv1ac.PolicyRuleApplyConfiguration, 0, len(requiredCRDs))
+	for _, crd := range requiredCRDs {
+		resource, group, found := strings.Cut(crd, ".")
 		if !found {
-			return fmt.Errorf("invalid requires format: %s", r)
+			return fmt.Errorf("invalid CRD name %q in a required dependency group", crd)
 		}
 		rbacRequires = append(rbacRequires, rbacv1ac.PolicyRule().
 			WithAPIGroups(group).
@@ -439,27 +472,108 @@ func (r *ReleaseController) SetupDynamicControllerWithWatches(dynCtrl controller
 	return nil
 }
 
-func extractRequires(revision unstructured.Unstructured) []string {
+func extractRequires(revision unstructured.Unstructured) []chrysopoeiav1.DependencyGroupReference {
 	return extractDependencies(revision, "requires")
 }
 
-func extractProvides(revision unstructured.Unstructured) []string {
+func extractManages(revision unstructured.Unstructured) []chrysopoeiav1.DependencyGroupReference {
+	return extractDependencies(revision, "manages")
+}
+
+func extractProvides(revision unstructured.Unstructured) []chrysopoeiav1.DependencyGroupReference {
 	return extractDependencies(revision, "provides")
 }
 
-func extractDependencies(revision unstructured.Unstructured, key string) []string {
-	requires, found, err := unstructured.NestedSlice(revision.Object, "spec", key)
+// extractDependencies reads the DependencyGroup references from `.spec.<key>` of an instance.
+// References to anything but a DependencyGroup are ignored, there are none yet.
+func extractDependencies(revision unstructured.Unstructured, key string) []chrysopoeiav1.DependencyGroupReference {
+	dependencies, found, err := unstructured.NestedSlice(revision.Object, "spec", key)
 	if err != nil || !found {
 		return nil
 	}
-	strs := make([]string, 0, len(requires))
-	for _, r := range requires {
-		if m, ok := r.(map[string]any); ok {
-			if name, ok := m["name"].(string); ok {
-				strs = append(strs, name)
-			}
+
+	refs := make([]chrysopoeiav1.DependencyGroupReference, 0, len(dependencies))
+	for _, dependency := range dependencies {
+		m, ok := dependency.(map[string]any)
+		if !ok {
+			continue
 		}
+		group, ok := m["dependencyGroup"].(map[string]any)
+		if !ok {
+			continue
+		}
+		name, ok := group["name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+		alias, _ := group["as"].(string)
+		refs = append(refs, chrysopoeiav1.DependencyGroupReference{Name: name, As: alias})
 	}
 
-	return strs
+	return refs
+}
+
+// ensureOperatorHarness harnesses the operator an instance deploys, if it manages a DependencyGroup.
+// The harness scopes the operator to the label of the group's scope, so that it only ever sees the
+// resources of the instances that requested that scope.
+//
+// The harness is named after the scope, not after the instance: an operator deployed a second time
+// under an alias serves a different scope and so gets its own harness, while the same scope is
+// always served by exactly one operator deployment.
+func (r *ReleaseController) ensureOperatorHarness(
+	ctx context.Context,
+	instance unstructured.Unstructured,
+	helmNSName string,
+	annotations, labels map[string]string,
+	ownerOpt client.FieldOwner,
+) error {
+	manages := extractManages(instance)
+	if len(manages) == 0 {
+		return nil
+	}
+	// `manages` holds at most one group, the CRD enforces it.
+	scope := manages[0].ScopeName()
+
+	harnessLabels := maps.Clone(labels)
+	// The harness is cluster-scoped and cannot be owned by the namespaced instance, so it is tied to
+	// the instance namespace by label and removed with it in cleanupRelease.
+	harnessLabels[operatorHarnessInstanceNamespaceLabel] = helmNSName
+
+	harness := chrysopoeiav1ac.
+		OperatorHarness(scope).
+		WithAnnotations(annotations).
+		WithLabels(harnessLabels).
+		WithSpec(
+			chrysopoeiav1ac.OperatorHarnessSpec().
+				WithScopeToLabel(RequiresLabelPrefix + scope).
+				WithOperator(
+					chrysopoeiav1ac.OperatorHarnessOperator().
+						WithNamespace(helmNSName).
+						// Every pod in the operator's own instance namespace belongs to the operator,
+						// and the service accounts its chart creates are not known here.
+						WithInjectProxyConfiguration(true),
+				),
+		)
+
+	return r.Apply(ctx, harness, client.ForceOwnership, ownerOpt)
+}
+
+// resolveGroupCRDs returns the names of the CRDs bundled by the referenced DependencyGroups.
+// A group that is not accepted is an error: its claim on the CRDs is disputed, so granting access to
+// them could hand out resources another group owns.
+func (r *ReleaseController) resolveGroupCRDs(ctx context.Context, refs []chrysopoeiav1.DependencyGroupReference) ([]string, error) {
+	var crds []string
+	for _, ref := range refs {
+		var group chrysopoeiav1.DependencyGroup
+		if err := r.Get(ctx, client.ObjectKey{Name: ref.Name}, &group); err != nil {
+			return nil, fmt.Errorf("unable to get DependencyGroup %q: %w", ref.Name, err)
+		}
+		if group.Status.State != chrysopoeiav1.DependencyGroupAccepted {
+			return nil, fmt.Errorf("DependencyGroup %q is not accepted, its state is %q", ref.Name, group.Status.State)
+		}
+		for _, crd := range group.Spec.CRDs {
+			crds = append(crds, crd.Name)
+		}
+	}
+	return crds, nil
 }

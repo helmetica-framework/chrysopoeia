@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,19 +17,27 @@ import (
 	admissionregistrationv1ac "k8s.io/client-go/applyconfigurations/admissionregistration/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
+	rbacv1ac "k8s.io/client-go/applyconfigurations/rbac/v1"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
+	"github.com/helmetica-framework/chrysopoeia/proxy"
 )
 
 const (
 	// OperatorHarnessLabel names the OperatorHarness an object was created for.
 	OperatorHarnessLabel = "chrysopoeia.io/operator-harness"
+
+	// operatorHarnessInstanceNamespaceLabel names the instance namespace an OperatorHarness was
+	// created for. A cluster-scoped harness cannot be owned by the namespaced instance, so this is
+	// what ties the two together.
+	operatorHarnessInstanceNamespaceLabel = "chrysopoeia.io/instance-namespace"
 
 	// ProxyCAConfigMapName is the name of the ConfigMap the harness proxy's CA certificate is copied
 	// to in the harnessed operator's namespace.
@@ -84,6 +94,9 @@ type OperatorHarnessManager struct {
 //+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;patch;update
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind;escalate
 
 func (r *OperatorHarnessManager) Reconcile(ctx context.Context, req reconcile.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("OperatorHarnessManager.Reconcile")
@@ -114,6 +127,22 @@ func (r *OperatorHarnessManager) Reconcile(ctx context.Context, req reconcile.Re
 			}
 		}
 	}()
+
+	// The scope of the operator is authorized by the proxy against the service account's annotation
+	// and the scopedlist permission, whether or not the proxy configuration is injected here.
+	if err := r.ensureServiceAccountScope(ctx, harness); err != nil {
+		l.Error(err, "Failed to annotate the harnessed service accounts")
+		statusCondition.Reason = "ServiceAccountScopeFailed"
+		statusCondition.Message = err.Error()
+		return ctrl.Result{}, err
+	}
+
+	if err := r.ensureScopedListRBAC(ctx, harness); err != nil {
+		l.Error(err, "Failed to grant the scopedlist permission")
+		statusCondition.Reason = "ScopedListRBACFailed"
+		statusCondition.Message = err.Error()
+		return ctrl.Result{}, err
+	}
 
 	if !harness.Spec.Operator.InjectProxyConfiguration {
 		if err := r.pruneProxyConfiguration(ctx, harness, ""); err != nil {
@@ -163,8 +192,141 @@ func (r *OperatorHarnessManager) SetupWithManager(name string, mgr ctrl.Manager)
 		For(&chrysopoeiav1.OperatorHarness{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&admissionregistrationv1.MutatingWebhookConfiguration{}).
+		// The operator's chart creates its service accounts after the harness exists, and they need
+		// the scope annotation and the scopedlist permission as they appear.
+		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(r.harnessesForServiceAccount)).
 		Named(name).
 		Complete(r)
+}
+
+func (r *OperatorHarnessManager) harnessesForServiceAccount(ctx context.Context, obj client.Object) []reconcile.Request {
+	var harnesses chrysopoeiav1.OperatorHarnessList
+	if err := r.List(ctx, &harnesses); err != nil {
+		log.FromContext(ctx).Error(err, "unable to list OperatorHarnesses for a ServiceAccount")
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, harness := range harnesses.Items {
+		if harnessesServiceAccount(harness, obj.GetNamespace(), obj.GetName()) {
+			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&harness)})
+		}
+	}
+	return requests
+}
+
+// harnessedServiceAccounts returns the existing service accounts the harness applies to. If the
+// harness names none, every service account in the operator's namespace is harnessed.
+//
+// Only existing service accounts are returned: the operator's chart creates them, and a service
+// account created here first would collide with the chart's ownership of it.
+func (r *OperatorHarnessManager) harnessedServiceAccounts(ctx context.Context, harness chrysopoeiav1.OperatorHarness) ([]corev1.ServiceAccount, error) {
+	var serviceAccounts corev1.ServiceAccountList
+	if err := r.List(ctx, &serviceAccounts, client.InNamespace(harness.Spec.Operator.Namespace)); err != nil {
+		return nil, fmt.Errorf("unable to list ServiceAccounts in %s: %w", harness.Spec.Operator.Namespace, err)
+	}
+
+	harnessed := make([]corev1.ServiceAccount, 0, len(serviceAccounts.Items))
+	for _, sa := range serviceAccounts.Items {
+		if harnessesServiceAccount(harness, sa.Namespace, sa.Name) {
+			harnessed = append(harnessed, sa)
+		}
+	}
+	return harnessed, nil
+}
+
+// harnessesServiceAccount reports whether the harness applies to a service account. A harness that
+// names no service account applies to every one in the operator's namespace.
+func harnessesServiceAccount(harness chrysopoeiav1.OperatorHarness, namespace, name string) bool {
+	if harness.Spec.Operator.Namespace != namespace {
+		return false
+	}
+	return len(harness.Spec.Operator.ServiceAccounts) == 0 ||
+		slices.Contains(harness.Spec.Operator.ServiceAccounts, name)
+}
+
+// ensureServiceAccountScope annotates the harnessed service accounts with the scope label. The proxy
+// reads the annotation to decide which label it scopes a cluster-scoped list or watch to.
+func (r *OperatorHarnessManager) ensureServiceAccountScope(ctx context.Context, harness chrysopoeiav1.OperatorHarness) error {
+	serviceAccounts, err := r.harnessedServiceAccounts(ctx, harness)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for _, sa := range serviceAccounts {
+		if sa.Annotations[proxy.ScopeAnnotation] == harness.Spec.ScopeToLabel {
+			continue
+		}
+
+		// Patched instead of applied so that a service account deleted in the meantime is not
+		// recreated as an empty stub.
+		patch := client.MergeFrom(sa.DeepCopy())
+		if sa.Annotations == nil {
+			sa.Annotations = map[string]string{}
+		}
+		sa.Annotations[proxy.ScopeAnnotation] = harness.Spec.ScopeToLabel
+
+		if err := r.Patch(ctx, &sa, patch, client.FieldOwner(operatorHarnessManagerName)); err != nil && !apierrors.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("unable to annotate ServiceAccount %s/%s: %w", sa.Namespace, sa.Name, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// ensureScopedListRBAC grants the harnessed service accounts the custom scopedlist verb for the scope
+// label. The proxy authorizes every cluster-scoped list or watch it rewrites against it, with the
+// label as the resource name, so this is what bounds the operator to its own scope.
+func (r *OperatorHarnessManager) ensureScopedListRBAC(ctx context.Context, harness chrysopoeiav1.OperatorHarness) error {
+	serviceAccounts, err := r.harnessedServiceAccounts(ctx, harness)
+	if err != nil {
+		return err
+	}
+
+	roleName := scopedListRoleName(harness)
+
+	clusterRole := rbacv1ac.
+		ClusterRole(roleName).
+		WithLabels(harnessLabels(harness)).
+		WithOwnerReferences(harnessOwnerReference(harness)).
+		WithRules(
+			rbacv1ac.PolicyRule().
+				WithAPIGroups("*").
+				WithResources("*").
+				WithVerbs(proxy.ScopedListVerb).
+				WithResourceNames(harness.Spec.ScopeToLabel),
+		)
+
+	subjects := make([]*rbacv1ac.SubjectApplyConfiguration, 0, len(serviceAccounts))
+	for _, sa := range serviceAccounts {
+		subjects = append(subjects,
+			rbacv1ac.Subject().
+				WithKind("ServiceAccount").
+				WithName(sa.Name).
+				WithNamespace(sa.Namespace),
+		)
+	}
+
+	clusterRoleBinding := rbacv1ac.
+		ClusterRoleBinding(roleName).
+		WithLabels(harnessLabels(harness)).
+		WithOwnerReferences(harnessOwnerReference(harness)).
+		WithRoleRef(
+			rbacv1ac.RoleRef().
+				WithAPIGroup("rbac.authorization.k8s.io").
+				WithKind("ClusterRole").
+				WithName(roleName),
+		).
+		WithSubjects(subjects...)
+
+	return errors.Join(
+		r.Apply(ctx, clusterRole, client.ForceOwnership, client.FieldOwner(operatorHarnessManagerName)),
+		r.Apply(ctx, clusterRoleBinding, client.ForceOwnership, client.FieldOwner(operatorHarnessManagerName)),
+	)
+}
+
+func scopedListRoleName(harness chrysopoeiav1.OperatorHarness) string {
+	return strings.Join([]string{"chrysopoeia", "harness", "scopedlist", harness.Name}, ":")
 }
 
 // ensureProxyCACertificate copies the harness proxy's CA certificate to the harnessed operator's

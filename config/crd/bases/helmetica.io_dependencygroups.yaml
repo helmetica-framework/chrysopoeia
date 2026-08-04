@@ -4,42 +4,36 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: operatorharnesses.helmetica.io
+  name: dependencygroups.helmetica.io
 spec:
   group: helmetica.io
   names:
-    kind: OperatorHarness
-    listKind: OperatorHarnessList
-    plural: operatorharnesses
-    singular: operatorharness
+    kind: DependencyGroup
+    listKind: DependencyGroupList
+    plural: dependencygroups
+    singular: dependencygroup
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.operator.namespace
-      name: Namespace
+    - jsonPath: .status.state
+      name: State
       type: string
-    - jsonPath: .spec.scopeToLabel
-      name: ScopeToLabel
+    - jsonPath: .spec.harnessRef.name
+      name: Harness
       type: string
-    - jsonPath: .spec.operator.injectProxyConfiguration
-      name: ProxyInjection
-      type: boolean
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .status.conditions[?(@.type=="Ready")].status
-      name: Ready
-      type: string
-    - jsonPath: .status.conditions[?(@.type=="Ready")].message
+    - jsonPath: .status.conditions[?(@.type=="Accepted")].message
       name: Status
       type: string
     name: v1
     schema:
       openAPIV3Schema:
         description: |-
-          OperatorHarness is the Schema for the operatorharnesses API.
-          It harnesses an operator that would otherwise require cluster-wide permissions by scoping its
-          access to resources carrying the label in `.spec.scopeToLabel`.
+          DependencyGroup is the Schema for the dependencygroups API.
+          It bundles the CustomResourceDefinitions of a service so that charts can depend on the group
+          instead of on individual CRDs, and ties them to the harness of the managing operator.
         properties:
           apiVersion:
             description: |-
@@ -59,50 +53,57 @@ spec:
           metadata:
             type: object
           spec:
-            description: OperatorHarnessSpec defines the desired state of OperatorHarness.
+            description: DependencyGroupSpec defines the desired state of DependencyGroup.
             properties:
-              operator:
-                description: Operator describes the harnessed operator's workload.
+              crds:
+                description: |-
+                  CRDs are the CustomResourceDefinitions that belong to this group.
+                  A CRD must not belong to more than one group, groups claiming an already claimed CRD are
+                  rejected. The CRDs do not have to exist yet.
+                items:
+                  description: DependencyGroupCRD identifies a CustomResourceDefinition
+                    belonging to a DependencyGroup.
+                  properties:
+                    name:
+                      description: Name is the fully qualified name of the CRD, as
+                        written in its `.metadata.name`.
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  type: object
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              harnessRef:
+                description: HarnessRef references the harness of the operator managing
+                  the CRDs of this group.
                 properties:
-                  injectProxyConfiguration:
-                    description: |-
-                      InjectProxyConfiguration defines if the harnessed operator should have the harness proxy injected.
-                      If enabled, the harness copies the proxy's CA certificate to Namespace and registers a mutating
-                      webhook that points the operator's pods at the harness proxy instead of the Kubernetes API server.
-                    type: boolean
-                  namespace:
-                    description: Namespace is the namespace the harnessed operator
-                      runs in.
+                  kind:
+                    description: Kind of the referent.
+                    enum:
+                    - OperatorHarness
+                    type: string
+                  name:
+                    description: Name of the referent.
                     minLength: 1
                     type: string
-                  serviceAccounts:
-                    description: |-
-                      ServiceAccounts are the service accounts, in Namespace, the harnessed operator's pods run as.
-                      Only pods running as one of these service accounts are harnessed. If empty, every pod in
-                      Namespace is harnessed, which is what a namespace holding a single operator wants: the service
-                      account is named by the operator's chart and does not have to be known up front.
-                    items:
-                      type: string
-                    type: array
                 required:
-                - namespace
+                - kind
+                - name
                 type: object
-              scopeToLabel:
-                description: |-
-                  ScopeToLabel is the label that needs to be present on a resource for the harnessed operator to manage it.
-                  It is used to scope cluster-wide permissions: if the harnessed operator does a cluster-scoped list or
-                  watch through the harness proxy, it only sees resources carrying this label.
-                minLength: 1
-                type: string
             required:
-            - operator
-            - scopeToLabel
+            - crds
             type: object
           status:
-            description: OperatorHarnessStatus defines the observed state of OperatorHarness.
+            description: DependencyGroupStatus defines the observed state of DependencyGroup.
             properties:
               conditions:
-                description: Conditions holds the conditions for the OperatorHarness.
+                description: |-
+                  Conditions holds the conditions for the DependencyGroup. The Accepted condition carries the
+                  reason a group was rejected.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -158,6 +159,14 @@ spec:
                   - type
                   type: object
                 type: array
+              state:
+                description: |-
+                  State is Accepted if the group holds the claim on all of its CRDs, and Rejected otherwise.
+                  Only accepted groups may be referenced by a CustomResourceDefinitionSource.
+                enum:
+                - Accepted
+                - Rejected
+                type: string
             type: object
         type: object
     served: true

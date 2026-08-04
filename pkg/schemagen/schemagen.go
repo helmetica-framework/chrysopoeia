@@ -154,36 +154,9 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 									Type:        "string",
 									Description: "The OCI repository where the service bundle is stored.",
 								},
-								"provides": {
-									Type:        "array",
-									Description: "The list of dependencies that this service provides.",
-									Items: &apiextv1.JSONSchemaPropsOrArray{
-										Schema: &apiextv1.JSONSchemaProps{
-											Type: "object",
-											Properties: map[string]apiextv1.JSONSchemaProps{
-												"name": {
-													Type:        "string",
-													Description: "The name of the dependency that this service provides. Should be the fully qualified crd name as written in the .metadata.name field of the CRD.",
-												},
-											},
-										},
-									},
-								},
-								"requires": {
-									Type:        "array",
-									Description: "The list of dependencies that this service requires.",
-									Items: &apiextv1.JSONSchemaPropsOrArray{
-										Schema: &apiextv1.JSONSchemaProps{
-											Type: "object",
-											Properties: map[string]apiextv1.JSONSchemaProps{
-												"name": {
-													Type:        "string",
-													Description: "The name of the dependency that this service requires. Should be the fully qualified crd name as written in the .metadata.name field of the CRD.",
-												},
-											},
-										},
-									},
-								},
+								"provides": dependencyReferences("The list of dependency groups whose CRDs this service ships."),
+								"manages":  dependencyReferences("The dependency group whose CRDs the operator of this service manages."),
+								"requires": dependencyReferences("The list of dependency groups that this service consumes."),
 							},
 						},
 						"status": {
@@ -377,6 +350,38 @@ func convertYAMLNodeToJSONSchema(node *yaml.Node, path string, hints map[string]
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported YAML node kind: %v", node.Kind)
+	}
+}
+
+// dependencyReferences is the schema of a list of references to a DependencyGroup. The scope the
+// group is used under, and with it the label the harness proxy scopes the operator to, is the
+// group's name or, if set, its alias.
+func dependencyReferences(description string) apiextv1.JSONSchemaProps {
+	return apiextv1.JSONSchemaProps{
+		Type:        "array",
+		Description: description,
+		Items: &apiextv1.JSONSchemaPropsOrArray{
+			Schema: &apiextv1.JSONSchemaProps{
+				Type:     "object",
+				Required: []string{"dependencyGroup"},
+				Properties: map[string]apiextv1.JSONSchemaProps{
+					"dependencyGroup": {
+						Type:     "object",
+						Required: []string{"name"},
+						Properties: map[string]apiextv1.JSONSchemaProps{
+							"name": {
+								Type:        "string",
+								Description: "The name of the DependencyGroup.",
+							},
+							"as": {
+								Type:        "string",
+								Description: "Overrides the name the scope label is built from, so that a second deployment of the same operator can serve a separate set of consumers.",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

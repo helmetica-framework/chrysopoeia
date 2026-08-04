@@ -33,6 +33,67 @@ var schemaYAML = typed.YAMLObject(`types:
     elementType:
       namedType: __untyped_deduced_
     elementRelationship: separable
+- name: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroup
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta
+    - name: spec
+      type:
+        namedType: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupSpec
+    - name: status
+      type:
+        namedType: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupStatus
+- name: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupCRD
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+- name: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupSpec
+  map:
+    fields:
+    - name: crds
+      type:
+        list:
+          elementType:
+            namedType: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupCRD
+          elementRelationship: associative
+          keys:
+          - name
+    - name: harnessRef
+      type:
+        namedType: com.github.helmetica-framework.chrysopoeia.api.v1.HarnessReference
+- name: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupState
+  scalar: string
+- name: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupStatus
+  map:
+    fields:
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
+          elementRelationship: atomic
+    - name: state
+      type:
+        namedType: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupState
+- name: com.github.helmetica-framework.chrysopoeia.api.v1.HarnessReference
+  map:
+    fields:
+    - name: kind
+      type:
+        scalar: string
+    - name: name
+      type:
+        scalar: string
 - name: com.github.helmetica-framework.chrysopoeia.api.v1.InstanceRevision
   scalar: untyped
   list:

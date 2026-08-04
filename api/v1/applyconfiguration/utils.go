@@ -22,10 +22,22 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1.CustomResourceDefinitionSourceSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSourceStatus"):
 		return &apiv1.CustomResourceDefinitionSourceStatusApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("Dependency"):
-		return &apiv1.DependencyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DependencyGroup"):
+		return &apiv1.DependencyGroupApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DependencyGroupCRD"):
+		return &apiv1.DependencyGroupCRDApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DependencyGroupReference"):
+		return &apiv1.DependencyGroupReferenceApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DependencyGroupSpec"):
+		return &apiv1.DependencyGroupSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DependencyGroupStatus"):
+		return &apiv1.DependencyGroupStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DependencyReference"):
+		return &apiv1.DependencyReferenceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DiscoveryReference"):
 		return &apiv1.DiscoveryReferenceApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("HarnessReference"):
+		return &apiv1.HarnessReferenceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("InstanceRevision"):
 		return &apiv1.InstanceRevisionApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("InstanceRevisionSpec"):

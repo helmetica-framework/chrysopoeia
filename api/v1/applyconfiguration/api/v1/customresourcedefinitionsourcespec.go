@@ -20,10 +20,20 @@ type CustomResourceDefinitionSourceSpecApplyConfiguration struct {
 	CRDNames *apiextensionsv1.CustomResourceDefinitionNames `json:"crdNames,omitempty"`
 	// VersionDiscovery defines how to discover the version of the source.
 	VersionDiscovery *VersionDiscoveryApplyConfiguration `json:"versionDiscovery,omitempty"`
-	// Provides is a list of dependencies that this CRD provides.
-	Provides []DependencyApplyConfiguration `json:"provides,omitempty"`
-	// Requires is a list of dependencies that this CRD requires.
-	Requires []DependencyApplyConfiguration `json:"requires,omitempty"`
+	// Provides lists the DependencyGroups whose CRDs the chart of this source ships. It grants the
+	// chart write access to those CRDs and lets Helm install them; it says nothing about who operates
+	// them, that is Manages. Exactly one source may provide a group, otherwise two charts install the
+	// same CRDs over each other. An operator that bundles its CRDs provides and manages the group,
+	// while an operator whose CRDs come in a chart of their own only manages it.
+	Provides []DependencyReferenceApplyConfiguration `json:"provides,omitempty"`
+	// Manages declares that this source deploys the operator managing the CRDs of a DependencyGroup.
+	// The instance of a managing source is the provider consumers are wired to: it is harnessed to the
+	// group's scope and granted access to the namespaces that require the group.
+	// A single group can be managed: the harness proxy scopes a cluster-scoped list to one label, and
+	// a label selector cannot express "carries either label".
+	Manages []DependencyReferenceApplyConfiguration `json:"manages,omitempty"`
+	// Requires lists the DependencyGroups that instances of this source consume.
+	Requires []DependencyReferenceApplyConfiguration `json:"requires,omitempty"`
 }
 
 // CustomResourceDefinitionSourceSpecApplyConfiguration constructs a declarative configuration of the CustomResourceDefinitionSourceSpec type for use with
@@ -59,7 +69,7 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithVersionDiscov
 // WithProvides adds the given value to the Provides field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Provides field.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithProvides(values ...*DependencyApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithProvides(values ...*DependencyReferenceApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithProvides")
@@ -69,10 +79,23 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithProvides(valu
 	return b
 }
 
+// WithManages adds the given value to the Manages field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Manages field.
+func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithManages(values ...*DependencyReferenceApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithManages")
+		}
+		b.Manages = append(b.Manages, *values[i])
+	}
+	return b
+}
+
 // WithRequires adds the given value to the Requires field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Requires field.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithRequires(values ...*DependencyApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithRequires(values ...*DependencyReferenceApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithRequires")
