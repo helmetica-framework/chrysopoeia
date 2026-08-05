@@ -1,10 +1,8 @@
 package schemagen_test
 
 import (
-	"embed"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -19,44 +17,45 @@ import (
 )
 
 func TestGenerateCRD_Golden(t *testing.T) {
-	chartLoader, err := loader.Loader("./testdata/charts/juiceshop-chart")
-	if err != nil {
-		t.Fatalf("Creating chart loader failed: %v", err)
+	charts, err := fs.Glob(os.DirFS("testdata/charts"), "*/values.yaml")
+	require.NoError(t, err)
+	require.NotEmpty(t, charts, "No test charts found in testdata/charts")
+	for i, chartPath := range charts {
+		charts[i] = strings.TrimSuffix(chartPath, "/values.yaml")
 	}
-	chart, err := chartLoader.Load()
-	if err != nil {
-		t.Fatalf("Loading chart failed: %v", err)
-	}
+	t.Log("Found test charts:", charts)
 
-	crd, err := schemagen.GenerateCRD(*chart)
-	if err != nil {
-		t.Fatalf("GenerateCRD failed: %v", err)
-	}
+	for _, chartPath := range charts {
+		t.Run(chartPath, func(t *testing.T) {
+			chartLoader, err := loader.Loader("./testdata/charts/" + chartPath)
+			require.NoError(t, err, "Creating chart loader failed for chart: %s", chartPath)
+			chart, err := chartLoader.Load()
+			require.NoError(t, err, "Loading chart failed for chart: %s", chartPath)
 
-	yamlData, err := kubeyaml.Marshal(crd)
-	if err != nil {
-		t.Fatalf("Failed to marshal CRD to YAML: %v", err)
-	}
+			crd, err := schemagen.GenerateCRD(*chart)
+			require.NoError(t, err, "GenerateCRD failed for chart: %s", chartPath)
 
-	if err := os.WriteFile("testdata/charts/juiceshop-crd.yaml", yamlData, 0644); err != nil {
-		t.Fatalf("Failed to write CRD to file: %v", err)
+			yamlData, err := kubeyaml.Marshal(crd)
+			require.NoError(t, err, "Failed to marshal CRD to YAML for chart: %s", chartPath)
+
+			require.NoError(t, os.WriteFile("./testdata/charts/"+chartPath+".golden.yaml", yamlData, 0644))
+		})
 	}
 }
 
-//go:embed testdata/preprocess/*
-var preprocessTestFiles embed.FS
-
 func Test_PreprocessYAMLHints(t *testing.T) {
-	files, err := fs.Glob(preprocessTestFiles, "testdata/preprocess/*.processed.yaml")
+	preprocessTestFiles := os.DirFS("testdata/preprocess")
+	files, err := fs.Glob(preprocessTestFiles, "*.processed.yaml")
 	require.NoError(t, err)
+	require.NotEmpty(t, files, "No test files found in testdata/preprocess")
 
 	for _, processedFile := range files {
-		t.Run(strings.TrimSuffix(filepath.Base(processedFile), ".processed.yaml"), func(t *testing.T) {
+		t.Run(strings.TrimSuffix(processedFile, ".processed.yaml"), func(t *testing.T) {
 			originalFile := strings.TrimSuffix(processedFile, ".processed.yaml") + ".yaml"
-			originalData, err := preprocessTestFiles.ReadFile(originalFile)
+			originalData, err := fs.ReadFile(preprocessTestFiles, originalFile)
 			require.NoError(t, err)
 
-			expectedProcessedData, err := preprocessTestFiles.ReadFile(processedFile)
+			expectedProcessedData, err := fs.ReadFile(preprocessTestFiles, processedFile)
 			require.NoError(t, err)
 
 			actualProcessedData, err := schemagen.PreprocessYAMLHints(originalData)
