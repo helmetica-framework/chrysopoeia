@@ -1,0 +1,76 @@
+tags1:
+  - tag1
+
+'#tags2':
+  items:
+    '#':
+      type: string
+tags2: []
+
+ints1:
+  - 1
+
+'#ints2':
+  items:
+    '#':
+      type: integer
+ints2: []
+
+arrayWithObjects1:
+- name: obj1
+  value: 1
+
+'#arrayWithObjects2':
+  items:
+    '#name':
+      type: string
+    '#value':
+      type: integer
+arrayWithObjects2: []
+
+'#stringmap1':
+  items:
+    '#':
+      type: string
+stringmap1:
+  a: b
+
+'#stringmap2':
+  items:
+    '#':
+      type: string
+stringmap2: {}
+
+'#intmap1':
+  items:
+    '#':
+      type: integer
+intmap1:
+  a: 3
+
+'#intmap2':
+  items:
+    '#':
+      type: integer
+intmap2: {}
+
+'#objmap1':
+  description: |
+    Item keys are always strings in JSON, we don't need to specify the type of the keys in the schema.
+
+    If the object has `properties` it is created as a regular structured object.
+    If the object has `items` it is created as a map of objects with the specified properties.
+
+    JSON Schema: properties->properties, items->additionalProperties
+  items:
+    '#a':
+      type: string
+objmap1:
+  a:
+    b: c
+
+'#objmap2':
+  items:
+    '#a':
+      type: string
+objmap2: {}

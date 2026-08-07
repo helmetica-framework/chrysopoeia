@@ -1,11 +1,13 @@
 package schemagen
 
 import (
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	parser "github.com/helmetica-framework/chrysopoeia/pkg/schemagen/parser"
 	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/utils/ptr"
@@ -32,8 +34,54 @@ var crdCategories = []string{"all", "claim", "helmetica"}
 // The generated CRD is namespace-scoped.
 // The CRD's group is derived from the chart's version and name, in the format "v<major>.<chart-name>.bundles.appcat.io".
 //
-// Warning: Currently all untagged null values in the values.yaml file are assumed to be strings.
-// This may lead to incorrect schema generation for fields that are actually of a different type.
+// The generated CRD has a single version named "bundle", which is served and stored.
+//
+// Untagged null values are skipped. Empty objects and arrays are skipped unless they have hints that specify their type.
+// You can use hints in the values.yaml to specify the type of a value, or to mark it as exported or not exported.
+// Hints are specified as a sibling key with a '#' prefix, e.g.:
+//
+//	foo:
+//	'#foo':
+//	  type: string
+//
+// Allowed types for hints are "boolean", "integer", "number", and "string".
+//
+// Empty objects and arrays can be annotated with hints to specify their type, e.g.:
+//
+//	stringArray: []
+//	'#stringArray':
+//	  items:
+//	    '#':
+//	      type: string
+//	# Equal to [""]
+//
+//	objArray: []
+//	'#objArray':
+//	  items:
+//	    '#name':
+//	      type: string
+//	# Equal to [{"name": ""}]
+//
+//	obj: {}
+//	'#obj':
+//	  properties:
+//	    '#name':
+//	      type: string
+//	# Equal to {"name": ""}
+//
+//	stringmap: {}
+//	'#stringmap':
+//	  items:
+//	    '#':
+//	      type: string
+//	# Equal to {"key": "value"}
+//
+//	objmap: {}
+//	'#objmap':
+//	  items:
+//	    '#name':
+//	      type: string
+//	# Equal to {"key": {"name": ""}}
 func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomResourceDefinition, error) {
 	o := &generateOptions{}
 	for _, opt := range opts {
@@ -51,17 +99,12 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 		return apiextv1.CustomResourceDefinition{}, fmt.Errorf("values.yaml not found in chart")
 	}
 
-	valuesYaml, err := PreprocessYAMLHints(valuesYaml)
+	valuesYaml, err := parser.PreprocessYAML(valuesYaml)
 	if err != nil {
 		return apiextv1.CustomResourceDefinition{}, fmt.Errorf("Failed to pre-process YAML: %w", err)
 	}
 
-	hints, err := collectHints(valuesYaml)
-	if err != nil {
-		return apiextv1.CustomResourceDefinition{}, err
-	}
-
-	schema, err := valuesSchema(valuesYaml, hints)
+	schema, err := valuesSchema(valuesYaml)
 	if err != nil {
 		return apiextv1.CustomResourceDefinition{}, err
 	}
@@ -216,47 +259,82 @@ func names(chart chartv2.Chart) (apiextv1.CustomResourceDefinitionNames, error) 
 	}, nil
 }
 
-func valuesSchema(rawValues []byte, hints map[string]hint) (apiextv1.JSONSchemaProps, error) {
-	var root map[string]any
-	if err := kubeyaml.UnmarshalStrict(rawValues, &root); err != nil {
+func valuesSchema(rawValues []byte) (apiextv1.JSONSchemaProps, error) {
+	jsonData, err := kubeyaml.YAMLToJSONStrict(rawValues)
+	if err != nil {
+		return apiextv1.JSONSchemaProps{}, fmt.Errorf("failed to convert YAML to JSON: %w", err)
+	}
+	var root any
+	if err := json.Unmarshal(jsonData, &root, json.WithUnmarshalers(parser.HintsUnmarshaler())); err != nil {
+		return apiextv1.JSONSchemaProps{}, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+	// collects all hints from the root node and its children into a map of jsonpointer -> hint
+	// Used to infer visibility of fields in the schema generation step.
+	hints := make(map[string]parser.Hint)
+	if err := collectHints(hints, []string{}, root); err != nil {
 		return apiextv1.JSONSchemaProps{}, err
 	}
 
-	schemaProps, err := convertJSONNodeTOJSONSchema(root, nil, []string{}, hints)
+	schemaProps, err := convertJSONNodeToJSONSchema(root, parser.Hint{}, []string{}, hints)
 	if err != nil {
 		return apiextv1.JSONSchemaProps{}, err
 	}
 	return ptr.Deref(schemaProps, apiextv1.JSONSchemaProps{}), nil
 }
 
-func convertJSONNodeTOJSONSchema(node, parent any, path []string, hints map[string]hint) (*apiextv1.JSONSchemaProps, error) {
-	hint := hints[jsonpointer(path)]
-	var lastPathElement string
-	if len(path) > 0 {
-		lastPathElement = path[len(path)-1]
+func pop(path []string) (string, []string) {
+	if len(path) == 0 {
+		return "", path
 	}
+	return path[len(path)-1], path[:len(path)-1]
+}
 
+func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hints map[string]parser.Hint) (*apiextv1.JSONSchemaProps, error) {
 	switch typedNode := node.(type) {
 	case map[string]any:
-		props := make(map[string]apiextv1.JSONSchemaProps)
-
-		var rawProps map[string]any
-		var rawPropsFoundAt []string
-		if p := findPropertiesKeyForObject(parent, lastPathElement); p != nil {
-			rawProps = p
-			rawPropsFoundAt = append(path[:len(path)-1], "#"+lastPathElement, "properties")
-		} else {
-			rawProps = typedNode
-			rawPropsFoundAt = path
+		panic("BUG: HintsUnmarshaler should have unmarshaled JSON objects into ObjWithHints, not map[string]any")
+	case parser.ObjWithHints:
+		if v, ok := typedNode[""]; len(typedNode) == 1 && ok {
+			return convertJSONNodeToJSONSchema(nil, ptr.Deref(v.Hint, parser.Hint{}), append(path, "#"), hints)
 		}
 
-		for k, v := range rawProps {
+		if p := hint.Items; p != nil {
+			lastPathElement, path := pop(path)
+			rawPropsFoundAt := append(path, "#"+lastPathElement, "items")
+
+			pj, err := convertJSONNodeToJSONSchema(p, parser.Hint{}, rawPropsFoundAt, hints)
+			if err != nil {
+				return nil, fmt.Errorf("error converting to schema at path %q: %w", jsonpointer(rawPropsFoundAt), err)
+			}
+			return &apiextv1.JSONSchemaProps{
+				Description: hint.Description,
+				Type:        "object",
+				AdditionalProperties: &apiextv1.JSONSchemaPropsOrBool{
+					Schema: pj,
+				},
+			}, nil
+		} else if p := hint.Properties; p != nil {
+			lastPathElement, path := pop(path)
+			rawPropsFoundAt := append(path, "#"+lastPathElement, "properties")
+
+			schema, err := convertJSONNodeToJSONSchema(p, parser.Hint{Description: hint.Description}, rawPropsFoundAt, hints)
+			if err != nil {
+				return nil, fmt.Errorf("error converting to schema at path %q: %w", jsonpointer(rawPropsFoundAt), err)
+			}
+			if schema.Type != "object" {
+				return nil, fmt.Errorf("expected object type for properties at path %q, got %q", jsonpointer(rawPropsFoundAt), schema.Type)
+			}
+			return schema, nil
+		}
+
+		var props = make(map[string]apiextv1.JSONSchemaProps)
+		for k, v := range typedNode {
 			if strings.HasPrefix(k, "#") {
 				continue
 			}
-			vs, err := convertJSONNodeTOJSONSchema(v, typedNode, append(rawPropsFoundAt, k), hints)
+			vs, err := convertJSONNodeToJSONSchema(v.Value, ptr.Deref(v.Hint, parser.Hint{}), append(path, k), hints)
 			if err != nil {
-				return nil, fmt.Errorf("error converting to schema at path %q: %w", strings.Join(append(rawPropsFoundAt, k), "/"), err)
+				return nil, fmt.Errorf("error converting to schema at path %q: %w", jsonpointer(append(path, k)), err)
 			}
 			if vs != nil {
 				props[k] = *vs
@@ -278,19 +356,20 @@ func convertJSONNodeTOJSONSchema(node, parent any, path []string, hints map[stri
 
 		var rawItems any
 		var rawItemsFoundAt []string
-		if itms := findItemsKeyForArray(parent, lastPathElement); itms != nil {
-			rawItems = itms
-			rawItemsFoundAt = append(path[:len(path)-1], "#"+lastPathElement, "items")
+		if p := hint.Items; p != nil {
+			lastPathElement, path := pop(path)
+			rawItemsFoundAt = append(path, "#"+lastPathElement, "items")
+			rawItems = p
 		} else if len(typedNode) > 0 {
 			rawItems = typedNode[0]
 			rawItemsFoundAt = append(path, "0")
 		} else {
-			fmt.Fprintf(os.Stderr, "WARNING: Skipping empty array with non-discoverable item type at %s.\n", strings.Join(path, "/"))
+			fmt.Fprintf(os.Stderr, "WARNING: Skipping empty array with non-discoverable item type at %s.\n", jsonpointer(rawItemsFoundAt))
 			return nil, nil
 		}
 
-		if itms, err := convertJSONNodeTOJSONSchema(rawItems, typedNode, rawItemsFoundAt, hints); err != nil {
-			return nil, fmt.Errorf("error converting to schema at path %q: %w", strings.Join(rawItemsFoundAt, "/"), err)
+		if itms, err := convertJSONNodeToJSONSchema(rawItems, parser.Hint{}, rawItemsFoundAt, hints); err != nil {
+			return nil, fmt.Errorf("error converting to schema at path %q: %w", jsonpointer(rawItemsFoundAt), err)
 		} else {
 			items = itms
 		}
@@ -352,48 +431,6 @@ func convertJSONNodeTOJSONSchema(node, parent any, path []string, hints map[stri
 	}
 }
 
-// findItemsKeyForArray returns the value of the "items" key for an array, if it exists.
-// It looks for a hint in the parent map with the key "#<lastPathElement>" and
-// returns the value of its "items" key if found. If not found, it returns nil.
-func findItemsKeyForArray(parent any, lastPathElement string) any {
-	tp, ok := parent.(map[string]any)
-	if !ok {
-		return nil
-	}
-	hm, ok := tp["#"+lastPathElement]
-	if !ok {
-		return nil
-	}
-	if hmMap, ok := hm.(map[string]any); ok {
-		if items, ok := hmMap["items"]; ok {
-			return items
-		}
-	}
-	return nil
-}
-
-// findPropertiesKeyForArray returns the value of the "properties" key for an object, if it exists.
-// It looks for a hint in the parent map with the key "#<lastPathElement>" and
-// returns the value of its "properties" key if found. If not found, it returns nil.
-func findPropertiesKeyForObject(parent any, lastPathElement string) map[string]any {
-	tp, ok := parent.(map[string]any)
-	if !ok {
-		return nil
-	}
-	hm, ok := tp["#"+lastPathElement]
-	if !ok {
-		return nil
-	}
-	if hmMap, ok := hm.(map[string]any); ok {
-		if properties, ok := hmMap["properties"]; ok {
-			if propsMap, ok := properties.(map[string]any); ok {
-				return propsMap
-			}
-		}
-	}
-	return nil
-}
-
 // dependencyReferences is the schema of a list of references to a DependencyGroup. The scope the
 // group is used under, and with it the label the harness proxy scopes the operator to, is the
 // group's name or, if set, its alias.
@@ -426,18 +463,6 @@ func dependencyReferences(description string) apiextv1.JSONSchemaProps {
 	}
 }
 
-func stripComment(s string) string {
-	lines := strings.Split(s, "\n")
-	strippedLines := make([]string, 0, len(lines))
-	for _, line := range lines {
-		strippedLine := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "#"))
-		if strippedLine != "" {
-			strippedLines = append(strippedLines, strippedLine)
-		}
-	}
-	return strings.Join(strippedLines, "\n")
-}
-
 type generateOptions struct {
 	group string
 	names apiextv1.CustomResourceDefinitionNames
@@ -458,4 +483,70 @@ func WithNames(names apiextv1.CustomResourceDefinitionNames) GenerateOption {
 	return func(o *generateOptions) {
 		o.names = names
 	}
+}
+
+// export checks if the given path is marked as exported in the hints map.
+// It returns true if the path is exported, false otherwise.
+// The export property is inherited from parent paths if not explicitly set on the current path.
+func exported(path string, hints map[string]parser.Hint, defaultValue bool) bool {
+	if h, ok := hints[path]; ok && h.Export != nil {
+		return *h.Export
+	}
+	// If the current path is not explicitly marked, check parent paths.
+	for {
+		lastSlash := strings.LastIndex(path, "/")
+		if lastSlash == -1 {
+			break
+		}
+		path = path[:lastSlash]
+		if h, ok := hints[path]; ok && h.Export != nil {
+			return *h.Export
+		}
+	}
+
+	return defaultValue
+}
+
+func collectHints(hints map[string]parser.Hint, path []string, obj any) error {
+	switch typedObj := obj.(type) {
+	case []any:
+		for i, v := range typedObj {
+			if err := collectHints(hints, append(path, fmt.Sprintf("%d", i)), v); err != nil {
+				return err
+			}
+		}
+	case parser.ObjWithHints:
+		for k, v := range typedObj {
+			if err := collectHints(hints, append(path, k), v.Value); err != nil {
+				return err
+			}
+			if h := v.Hint; h != nil {
+				hints[jsonpointer(append(path, k))] = *h
+
+				path := append(path, "#"+k)
+				if h.Items != nil {
+					path = append(path, "items")
+					collectHints(hints, path, h.Items)
+				}
+				if h.Properties != nil {
+					path = append(path, "properties")
+					collectHints(hints, path, h.Properties)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func jsonpointer(path []string) string {
+	escaped := make([]string, len(path))
+	for i, p := range path {
+		escaped[i] = escapeJSONPointer(p)
+	}
+	return "/" + strings.Join(escaped, "/")
+}
+
+func escapeJSONPointer(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1")
 }

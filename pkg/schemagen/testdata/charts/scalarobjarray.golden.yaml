@@ -1,0 +1,233 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: scalarobjarrays.v3.juiceshop.bundles.appcat.io
+spec:
+  group: v3.juiceshop.bundles.appcat.io
+  names:
+    categories:
+    - all
+    - claim
+    - helmetica
+    kind: ScalarObjArray
+    listKind: ScalarObjArrayList
+    plural: scalarobjarrays
+    singular: scalarobjarray
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.instanceNamespace
+      name: Instance Namespace
+      type: string
+    - jsonPath: .status.releaseStatus
+      name: Status
+      type: string
+    - jsonPath: .status.driftDetected
+      name: Drift
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: bundle
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            description: Configures the desired state of the service.
+            properties:
+              approval:
+                default:
+                  strategy: Automatic
+                description: Approval contains the approval strategy for the service.
+                properties:
+                  strategy:
+                    default: Automatic
+                    description: The approval strategy for the service. Can be either
+                      'Automatic' or 'Manual'.
+                    enum:
+                    - Automatic
+                    - Manual
+                    type: string
+                type: object
+              manages:
+                description: The dependency group whose CRDs the operator of this
+                  service manages.
+                items:
+                  properties:
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
+                  type: object
+                type: array
+              ociUrl:
+                description: The OCI repository where the service bundle is stored.
+                type: string
+              provides:
+                description: The list of dependency groups whose CRDs this service
+                  ships.
+                items:
+                  properties:
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
+                  type: object
+                type: array
+              requires:
+                description: The list of dependency groups that this service consumes.
+                items:
+                  properties:
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
+                  type: object
+                type: array
+              values:
+                description: This field together with the `.spec.version` field defines
+                  the configuration of the service. Every change to either of these
+                  two fields creates a new revision of the service.
+                properties:
+                  arrayWithObjects1:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        value:
+                          type: integer
+                      type: object
+                    type: array
+                  arrayWithObjects2:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        value:
+                          type: integer
+                      type: object
+                    type: array
+                  intmap1:
+                    additionalProperties:
+                      type: integer
+                    type: object
+                  intmap2:
+                    additionalProperties:
+                      type: integer
+                    type: object
+                  ints1:
+                    items:
+                      type: integer
+                    type: array
+                  ints2:
+                    items:
+                      type: integer
+                    type: array
+                  objmap1:
+                    additionalProperties:
+                      properties:
+                        a:
+                          type: string
+                      type: object
+                    description: |
+                      Item keys are always strings in JSON, we don't need to specify the type of the keys in the schema.
+
+                      If the object has `properties` it is created as a regular structured object.
+                      If the object has `items` it is created as a map of objects with the specified properties.
+
+                      JSON Schema: properties->properties, items->additionalProperties
+                    type: object
+                  objmap2:
+                    additionalProperties:
+                      properties:
+                        a:
+                          type: string
+                      type: object
+                    type: object
+                  stringmap1:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  stringmap2:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  tags1:
+                    items:
+                      type: string
+                    type: array
+                  tags2:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              version:
+                description: The version of the service. Every change to this field
+                  together with the `.spec.values` field creates a new revision of
+                  the service.
+                type: string
+            type: object
+          status:
+            description: Status contains the observed state of the service.
+            properties:
+              appliedRevision:
+                description: The name of the revision that is currently applied to
+                  the cluster.
+                type: string
+              driftDetected:
+                description: Whether a drift was detected.
+                type: boolean
+              instanceNamespace:
+                description: The namespace where the service is deployed in.
+                type: string
+              latestRevision:
+                description: The name of the revision that currently matches the spec.
+                type: string
+              releaseStatus:
+                description: The current status of the service.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null
