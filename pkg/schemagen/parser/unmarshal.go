@@ -16,6 +16,8 @@ type Hint struct {
 
 	Type string `json:"type"`
 
+	Enum []any `json:"enum,omitempty"`
+
 	Items      any `json:"items,omitempty"`
 	Properties any `json:"properties,omitempty"`
 
@@ -35,6 +37,9 @@ func (h *Hint) UnmarshalJSONFrom(d *jsontext.Decoder) error {
 	}
 	if th.Type != "" && !validTypes.Has(th.Type) {
 		return fmt.Errorf("invalid hint type: %s", th.Type)
+	}
+	if len(th.Enum) > 0 && (th.Items != nil || th.Properties != nil) {
+		return fmt.Errorf("hint cannot have both enum and items/properties")
 	}
 	*h = Hint(th)
 	return nil

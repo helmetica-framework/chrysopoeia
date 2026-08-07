@@ -1,0 +1,23 @@
+'#string':
+  type: string
+  enum: [a, b, c]
+string:
+
+'#int':
+  type: integer
+  enum: [1, 2, 3]
+int:
+
+'#stringmap':
+  items:
+    '#':
+      type: string
+      enum: [a, b, c]
+stringmap: {}
+
+'#stringarray':
+  items:
+    '#':
+      type: string
+      enum: [a, b, c]
+stringarray: []

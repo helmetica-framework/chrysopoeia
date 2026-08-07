@@ -385,49 +385,52 @@ func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hint
 				},
 			}, nil
 		}
-	case string:
-		if exported := exported(jsonpointer(path), hints, true); !exported {
-			return nil, nil
-		}
-
-		return &apiextv1.JSONSchemaProps{
-			Description: hint.Description,
-			Type:        "string",
-		}, nil
-	case float64:
-		if exported := exported(jsonpointer(path), hints, true); !exported {
-			return nil, nil
-		}
-
-		return &apiextv1.JSONSchemaProps{
-			Description: hint.Description,
-			Type:        "integer",
-		}, nil
-	case bool:
-		if exported := exported(jsonpointer(path), hints, true); !exported {
-			return nil, nil
-		}
-
-		return &apiextv1.JSONSchemaProps{
-			Description: hint.Description,
-			Type:        "boolean",
-		}, nil
-	case nil:
-		if exported := exported(jsonpointer(path), hints, true); !exported {
-			return nil, nil
-		}
-
-		if hint.Type == "" {
+	default:
+		var typ string
+		if hint.Type != "" {
+			typ = hint.Type
+		} else if t := guessTypeFromValue(typedNode); t != "" {
+			typ = t
+		} else {
 			fmt.Fprintf(os.Stderr, "WARNING: Skipping key with non-discoverable type at %s, use hints {'#KEY': {'type': 'your_type'}} to specify the type.\n", strings.Join(path, "/"))
 			return nil, nil
 		}
 
+		if exported := exported(jsonpointer(path), hints, true); !exported {
+			return nil, nil
+		}
+
+		enums := make([]apiextv1.JSON, len(hint.Enum))
+		for i, e := range hint.Enum {
+			ej, err := json.Marshal(e)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal enum value at path %q: %w", jsonpointer(append(path, fmt.Sprintf("enum[%d]", i))), err)
+			}
+			enums[i] = apiextv1.JSON{Raw: ej}
+		}
+
 		return &apiextv1.JSONSchemaProps{
 			Description: hint.Description,
-			Type:        hint.Type,
+			Type:        typ,
+			Enum:        enums,
 		}, nil
+	}
+}
+
+func guessTypeFromValue(value any) string {
+	switch value.(type) {
+	case string:
+		return "string"
+	case float64:
+		return "integer"
+	case bool:
+		return "boolean"
+	case []any:
+		return "array"
+	case map[string]any:
+		return "object"
 	default:
-		return nil, fmt.Errorf("unknown type: %T", node)
+		return ""
 	}
 }
 
