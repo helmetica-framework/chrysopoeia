@@ -3,11 +3,13 @@ package testutil
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -27,6 +29,7 @@ func SetupEnvtestEnv(t *testing.T) (*runtime.Scheme, *rest.Config) {
 
 	scheme := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	require.NoError(t, apiextv1.AddToScheme(scheme))
 	require.NoError(t, chrysopoeiav1.AddToScheme(scheme))
 
 	testEnv := &envtest.Environment{
@@ -85,7 +88,17 @@ func TmpNamespace(t *testing.T, c client.Client) string {
 // setting the 'KUBEBUILDER_ASSETS' environment variable. To ensure the binaries are
 // properly set up, run 'make test' once beforehand.
 func getFirstFoundEnvTestBinaryDir(t *testing.T) string {
-	basePath := filepath.Join("..", "bin", "k8s")
+	out, err := exec.CommandContext(t.Context(), "go", "env", "GOMOD").CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to get GOMOD: %s", err.Error())
+	}
+	if len(out) == 0 {
+		t.Fatal("GOMOD is empty, ensure you are running tests from a Go module")
+	}
+	root := filepath.Dir(string(out))
+	t.Logf("SetupEnvtestEnv found Go root: %s", root)
+
+	basePath := filepath.Join(root, "bin", "k8s")
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
 		t.Logf("Failed to read directory %q: %s", basePath, err.Error())
