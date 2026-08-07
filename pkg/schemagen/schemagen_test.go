@@ -12,6 +12,7 @@ import (
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	kubeyaml "sigs.k8s.io/yaml"
 
@@ -66,7 +67,20 @@ func TestGenerateCRD_Golden(t *testing.T) {
 						t.Logf("Failed to get CRD %s: %s", crd.Name, err.Error())
 						return false
 					}
-					return len(tmpCRD.Status.AcceptedNames.Plural) > 0
+					if tmpCRD.Status.AcceptedNames.ListKind == "" || len(tmpCRD.Status.StoredVersions) == 0 {
+						return false
+					}
+					var tryList unstructured.UnstructuredList
+					tryList.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   crd.Spec.Group,
+						Version: tmpCRD.Status.StoredVersions[0],
+						Kind:    tmpCRD.Status.AcceptedNames.ListKind,
+					})
+					if err := cli.List(t.Context(), &tryList); err != nil {
+						t.Logf("Failed to list CRD %s: %s", crd.Name, err.Error())
+						return false
+					}
+					return true
 				}, 3*time.Second, 10*time.Millisecond)
 
 				applytests, err := fs.Glob(os.DirFS(filepath.Join("testdata/charts", chartPath)), "examples/*.yaml")
