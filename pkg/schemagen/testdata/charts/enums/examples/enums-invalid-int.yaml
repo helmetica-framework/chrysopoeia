@@ -1,0 +1,9 @@
+apiVersion: v3.juiceshop.bundles.appcat.io/bundle
+kind: Enum
+metadata:
+  annotations:
+    match-error: 'Unsupported value: 34: supported values: "1", "2", "3"'
+  name: enums
+spec:
+  values:
+    int: 34

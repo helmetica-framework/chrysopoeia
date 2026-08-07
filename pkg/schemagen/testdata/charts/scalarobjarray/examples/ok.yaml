@@ -1,0 +1,30 @@
+apiVersion: v3.juiceshop.bundles.appcat.io/bundle
+kind: ScalarObjArray
+metadata:
+  generateName: scalarobjarray-
+spec:
+  values:
+    tags1: [foo]
+    tags2: [blub]
+    ints1: [1]
+    ints2: [2]
+    arrayWithObjects1:
+      - name: obj1
+        value: 1
+    arrayWithObjects2:
+      - name: obj1
+        value: 1
+    stringmap1:
+      a: b
+    stringmap2:
+      a: b
+    intmap1:
+      a: 3
+    intmap2:
+      a: 3
+    objmap1:
+      key:
+        a: obj1
+    objmap2:
+      key:
+        a: obj1

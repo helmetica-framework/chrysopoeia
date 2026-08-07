@@ -1,0 +1,9 @@
+apiVersion: v3.juiceshop.bundles.appcat.io/bundle
+kind: Enum
+metadata:
+  annotations:
+    match-error: 'Unsupported value: "invalid": supported values: "a", "b", "c"'
+  name: enums
+spec:
+  values:
+    string: invalid
