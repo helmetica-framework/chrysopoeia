@@ -1,0 +1,26 @@
+'#private':
+  export: false
+private: ""
+
+'#public':
+  export: true
+public: ""
+
+default: ""
+
+nested:
+  a:
+    b:
+      c: ""
+
+'#privateNested':
+  export: false
+privateNested:
+  a:
+    b:
+      c: ""
+  d:
+    e:
+      '#f':
+        export: true
+      f: ""

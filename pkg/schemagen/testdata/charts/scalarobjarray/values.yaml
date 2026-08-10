@@ -28,6 +28,13 @@ arrayWithObjects1:
       type: integer
 arrayWithObjects2: []
 
+'#arrayWithObjects3':
+  items:
+    # The name of the object in the array.
+    name: !!str
+    value: 0
+arrayWithObjects3: []
+
 '#stringmap1':
   items:
     '#':
