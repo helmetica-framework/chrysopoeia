@@ -24,3 +24,9 @@ privateNested:
       '#f':
         export: true
       f: ""
+  '#inheritanceinarray':
+    items:
+      '#g':
+        export: true
+      g: ""
+  inheritanceinarray: []

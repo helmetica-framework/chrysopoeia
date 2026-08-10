@@ -145,6 +145,13 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      inheritanceinarray:
+                        items:
+                          properties:
+                            g:
+                              type: string
+                          type: object
+                        type: array
                     type: object
                   public:
                     type: string

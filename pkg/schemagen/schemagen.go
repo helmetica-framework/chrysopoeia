@@ -529,10 +529,12 @@ func collectHints(hints map[string]parser.Hint, path []string, obj any) error {
 				path := append(path, "#"+k)
 				if h.Items != nil {
 					path = append(path, "items")
+					hints[jsonpointer(path)] = *h
 					collectHints(hints, path, h.Items)
 				}
 				if h.Properties != nil {
 					path = append(path, "properties")
+					hints[jsonpointer(path)] = *h
 					collectHints(hints, path, h.Properties)
 				}
 			}
