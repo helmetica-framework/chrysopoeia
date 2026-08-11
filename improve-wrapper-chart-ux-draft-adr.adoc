@@ -1,0 +1,89 @@
+= Improve Wrapper Chart UX
+
+## Problem Statement
+
+We want to make it possible and easy to bring in already existing Helm charts into Helmetica.
+For this we're using the concept of a "wrapper chart" which is a Helm chart that wraps around another Helm chart.
+The wrapper chart adds Helmetica specific functionality to the wrapped chart, such as backups and monitoring.
+It also allows further refinements to the structure of the Claim CRD by making fields private or public or by supplying type hints.
+
+Helm does not allow to template the values.yaml file of a chart, and its sub-charts.
+This makes it improssible to improve the UX of "bad" or "too generic" charts; we can't map fields and make them more user friendly.
+
+. Example of a Chart with bad UX:
+[source,yaml]
+....
+server:
+  ingress:
+    enabled: true
+    hosts:
+      - host: example.com
+    tls:
+      - secretName: example-tls
+        hosts:
+          - example.com
+....
+
+In the above Chart four fields need to be filled in by the user.
+Host name is duplicated. Even worse, when the clusters wildcard domain is used the user does not need to fill in the TLS array at all.
+`enabled` could be interfered from the presence of one or more hosts.
+`secretName` should probably not be exposed to the user at all, as it is an implementation detail of the platform under the framework.
+
+## High level goals
+
+- Allow service maintainers to bring in existing Helm charts and create a nice UX for the end user and operators.
+
+## Proposals
+
+### Leave as is, document workarounds
+
+We currently do not change the way sub-charts work.
+
+We expect many upstream charts to have good UX.
+Configuration that is usually not great such as ingress will be handled by a Helmetica specific definition so it works on different platforms.
+
+Charts with bad UX can be forked.
+This is usually not a problem because once a chart exists and is stable there are not many changes to it.
+Renovating the images of the chart is usually enough.
+
+### Render Claim in Wrapper Chart
+
+For charts with bad UX we can create a very generic wrapper chart that renders to a claim CRD with all options of the wrapped chart.
+We then just render the claim CRD in a wrapper-wrapper chart.
+
+This comes with the downside of the diff no longer being as useful as there are more abstracted layers behind the diff.
+
+### Allow Helm values.yaml templating
+
+We allow templating the values.yaml file of a chart and its sub-charts.
+This allows us to map fields and make them more user friendly.
+
+. Example of a templated Chart with improved UX:
+[source,yaml]
+....
+ingressHostname: example.com
+
+server:
+  ingress:
+    enabled: "cel: doc.ingressHostname != ''"
+    hosts: "cel: doc.ingressHostname != '' ? [ { host: doc.ingressHostname } ] : []"
+    tls: "cel: doc.ingressHostname != '' ? [ { secretName: 'example-tls', hosts: [ doc.ingressHostname ] } ] : []"
+....
+
+This would make wrapper charts much more flexible and powerful.
+We can create nice UX for the end user and operators without having to fork the wrapped chart.
+
+The implementation side of this feature is not trivial.
+While a flat implementation of just one chart with cel expressions in the values.yaml file is very easy to implement, it starts breaking down as soon as someone wants to use such a chart as a sub-chart of another chart.
+
+Upstream Helm tried many times to standardize a templating language for values.yaml files, but it never made it into the mainline Helm codebase due to the complexity of templating sub-charts.
+We'd probably need to hook into the helm sub-chart rendering process and add our own templating engine to it.
+We're not sure if this is possible without forking Helm, which we want to avoid.
+
+## Decision
+
+We're not sure if the added complexity of templating values.yaml files is worth the benefit of improved UX for wrapper charts.
+We will leave the current implementation as is and document workarounds for charts with bad UX.
+Some charts will need to be forked to improve their UX, but this is usually not a problem as they are stable and don't change much.
+
+We delay the decision to allow templating values.yaml files until we have a better understanding of the complexity of implementing it and the benefits it would bring.
