@@ -75,6 +75,16 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	if !claim.GetDeletionTimestamp().IsZero() {
 		return ctrl.Result{}, nil
 	}
+	{
+		var ns corev1.Namespace
+		if err := r.Get(ctx, client.ObjectKey{Name: instanceNSName}, &ns); err != nil && !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, fmt.Errorf("unknown error retrieving namespace for deletion check %s: %w", instanceNSName, err)
+		}
+		if !ns.DeletionTimestamp.IsZero() {
+			l.Info("Previous release is being deleted, skipping release until deletion is complete", "namespace", instanceNSName)
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+	}
 
 	var revisions chrysopoeiav1.InstanceRevisionList
 	if err := r.List(ctx, &revisions, client.InNamespace(req.Namespace), client.MatchingFields{ownerUIDField: string(claim.GetUID())}); err != nil {
