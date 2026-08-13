@@ -14,10 +14,10 @@ import (
 	kubeyaml "sigs.k8s.io/yaml"
 )
 
-const CRDKindAnnotation = "crd.bundle.appcat.io/kind"
-const CRDListKindAnnotation = "crd.bundle.appcat.io/listKind"
-const CRDSingularAnnotation = "crd.bundle.appcat.io/singular"
-const CRDPluralAnnotation = "crd.bundle.appcat.io/plural"
+const CRDKindAnnotation = "crd.bundle.helmetica.io/kind"
+const CRDListKindAnnotation = "crd.bundle.helmetica.io/listKind"
+const CRDSingularAnnotation = "crd.bundle.helmetica.io/singular"
+const CRDPluralAnnotation = "crd.bundle.helmetica.io/plural"
 
 var crdCategories = []string{"all", "claim", "helmetica"}
 
@@ -32,7 +32,7 @@ var crdCategories = []string{"all", "claim", "helmetica"}
 //   - [CRDPluralAnnotation]: The plural name of the CRD. Defaults to lowercase kind + "s".
 //
 // The generated CRD is namespace-scoped.
-// The CRD's group is derived from the chart's version and name, in the format "v<major>.<chart-name>.bundles.appcat.io".
+// The CRD's group is derived from the chart's version and name, in the format "v<major>.<chart-name>.helmetica-bundles.io".
 //
 // The generated CRD has a single version named "bundle", which is served and stored.
 //
@@ -129,7 +129,7 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 		if err != nil {
 			return apiextv1.CustomResourceDefinition{}, fmt.Errorf("invalid strict chart version: %s", chart.Metadata.Version)
 		}
-		crd.Spec.Group = fmt.Sprintf("v%d.%s.bundles.appcat.io", semver.Major(), chart.Name())
+		crd.Spec.Group = fmt.Sprintf("v%d.%s.helmetica-bundles.io", semver.Major(), chart.Name())
 	}
 
 	crd.Name = fmt.Sprintf("%s.%s", crd.Spec.Names.Plural, crd.Spec.Group)

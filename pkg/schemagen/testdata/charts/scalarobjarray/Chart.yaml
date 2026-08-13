@@ -24,7 +24,7 @@ version: 3.1.0
 appVersion: "1.31.2"
 
 annotations:
-  crd.bundle.appcat.io/kind: "ScalarObjArray"
-  crd.bundle.appcat.io/listKind: "ScalarObjArrayList"
-  crd.bundle.appcat.io/singular: "scalarobjarray"
-  crd.bundle.appcat.io/plural: "scalarobjarrays"
+  crd.bundle.helmetica.io/kind: "ScalarObjArray"
+  crd.bundle.helmetica.io/listKind: "ScalarObjArrayList"
+  crd.bundle.helmetica.io/singular: "scalarobjarray"
+  crd.bundle.helmetica.io/plural: "scalarobjarrays"

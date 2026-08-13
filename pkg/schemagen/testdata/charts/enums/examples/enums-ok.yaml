@@ -1,4 +1,4 @@
-apiVersion: v3.juiceshop.bundles.appcat.io/bundle
+apiVersion: v3.juiceshop.helmetica-bundles.io/bundle
 kind: Enum
 metadata:
   name: enums

@@ -24,7 +24,7 @@ version: 3.1.0
 appVersion: "1.31.2"
 
 annotations:
-  crd.bundle.appcat.io/kind: "PublicPrivateExport"
-  crd.bundle.appcat.io/listKind: "PublicPrivateExportList"
-  crd.bundle.appcat.io/singular: "publicprivateexport"
-  crd.bundle.appcat.io/plural: "publicprivateexports"
+  crd.bundle.helmetica.io/kind: "PublicPrivateExport"
+  crd.bundle.helmetica.io/listKind: "PublicPrivateExportList"
+  crd.bundle.helmetica.io/singular: "publicprivateexport"
+  crd.bundle.helmetica.io/plural: "publicprivateexports"
