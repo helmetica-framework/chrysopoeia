@@ -12,7 +12,7 @@ kubectl apply -k config/flux
 kubectl apply -k config/crd
 kubectl apply -k config/samples
 
-make run
+just run
 
 kubectl get -k config/samples
 kubectl get crds podinfos.v6.podinfo.helmetica-bundles.io
