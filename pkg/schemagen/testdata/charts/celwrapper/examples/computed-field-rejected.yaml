@@ -1,0 +1,15 @@
+apiVersion: v1.celwrapper.helmetica-bundles.io/bundle
+kind: CelWrapper
+metadata:
+  name: computed-field-rejected
+  annotations:
+    match-error: 'unknown field "spec.values.podinfo"'
+spec:
+  version: 1.0.0
+  ociUrl: oci://example.com/celwrapper
+  values:
+    # Every field under podinfo is computed, so the whole key is absent from the CRD and strict
+    # field validation rejects it.
+    podinfo:
+      ingress:
+        enabled: true

@@ -1,0 +1,12 @@
+apiVersion: v2
+name: celwrapper
+description: A wrapper chart deriving its subchart's values from one field
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+annotations:
+  crd.bundle.helmetica.io/kind: "CelWrapper"
+  crd.bundle.helmetica.io/listKind: "CelWrapperList"
+  crd.bundle.helmetica.io/singular: "celwrapper"
+  crd.bundle.helmetica.io/plural: "celwrappers"
