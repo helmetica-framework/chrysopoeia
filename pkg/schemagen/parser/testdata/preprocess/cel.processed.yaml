@@ -1,0 +1,20 @@
+ingressHostname: ""
+'#ingressHostname':
+  description: The hostname of the service
+
+server:
+  ingress:
+    enabled: "cel: values.ingressHostname != ''"
+    '#enabled':
+      export: false
+    hosts: "cel: values.ingressHostname == '' ? [] : [{'host': values.ingressHostname}]"
+    '#hosts':
+      export: false
+    className: nginx
+  '#replicas':
+    export: true
+  replicas: 1
+
+'#overruled':
+  export: false
+overruled: "cel: 1 + 1"
