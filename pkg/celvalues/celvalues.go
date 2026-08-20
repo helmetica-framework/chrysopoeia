@@ -15,7 +15,6 @@ package celvalues
 import (
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -103,7 +102,7 @@ func (p *Preprocessor) scan(env *cel.Env, path []string, src, dst map[string]any
 		}
 		keyPath := append(slices.Clone(path), key)
 
-		if looksLikeExpression(key) {
+		if parser.LooksLikeCelExpression(key) {
 			return fmt.Errorf("%s: a key looks like a cel: expression, expressions belong in the value", display(keyPath))
 		}
 
@@ -112,7 +111,7 @@ func (p *Preprocessor) scan(env *cel.Env, path []string, src, dst map[string]any
 			expr, ok := strings.CutPrefix(v, parser.CelPrefix)
 			// not an expression, add to default
 			if !ok {
-				if nearMiss(v) {
+				if parser.LooksLikeCelExpression(v) {
 					return fmt.Errorf("%s: %q is not a cel: expression, the prefix is exactly %q", display(keyPath), v, parser.CelPrefix)
 				}
 				dst[key] = v
@@ -151,7 +150,7 @@ func (p *Preprocessor) scan(env *cel.Env, path []string, src, dst map[string]any
 func rejectExpressions(path []string, val any) error {
 	switch v := val.(type) {
 	case string:
-		if strings.HasPrefix(v, parser.CelPrefix) {
+		if parser.IsCelExpression(v) {
 			return fmt.Errorf("%s: a cel: expression cannot appear inside a list", display(path))
 		}
 	case map[string]any:
@@ -172,23 +171,6 @@ func rejectExpressions(path []string, val any) error {
 		}
 	}
 	return nil
-}
-
-// nearMissPrefix matches the spellings of the prefix that are not the prefix: a different case, a
-// leading space, a space before the colon.
-var nearMissPrefix = regexp.MustCompile(`(?i)^\s*cel\s*:`)
-
-// looksLikeExpression reports whether s carries the prefix in any spelling. Used on keys, where
-// even the canonical spelling is a mistake.
-func looksLikeExpression(s string) bool {
-	return nearMissPrefix.MatchString(s)
-}
-
-// nearMiss reports whether s looks like an attempt at the prefix without being it. Such a string
-// would otherwise be handed to Helm verbatim and fail at deploy time as a nonsense config value,
-// which is exactly the class of author mistake compiling at load time exists to catch.
-func nearMiss(s string) bool {
-	return !strings.HasPrefix(s, parser.CelPrefix) && nearMissPrefix.MatchString(s)
 }
 
 // display renders a path for a human: dots between keys, no dot before a list index.
