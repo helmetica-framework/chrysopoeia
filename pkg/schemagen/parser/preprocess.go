@@ -7,6 +7,9 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
+// Magic string to mark a value in values.yaml as a cel processed value
+const CelPrefix = "cel:"
+
 // PreprocessYAML preprocesses the given YAML input, extracting the [Hint.Description] from the leading comments of each key
 // and adding it as a hint for the corresponding key in the output YAML.
 func PreprocessYAML(yamlData []byte) ([]byte, error) {
