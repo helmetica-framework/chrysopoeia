@@ -8,6 +8,7 @@ require (
 	github.com/fluxcd/image-reflector-controller/api v1.2.1
 	github.com/fluxcd/source-controller/api v1.9.1
 	github.com/go-logr/logr v1.4.3
+	github.com/google/cel-go v0.26.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/multierr v1.11.0
@@ -65,7 +66,6 @@ require (
 	github.com/gobuffalo/flect v1.0.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/cel-go v0.26.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
