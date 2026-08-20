@@ -66,3 +66,26 @@ func Test_PreprocessYAMLHints_NothingToConfigure(t *testing.T) {
 		})
 	}
 }
+
+func Test_CelExpressionDetection(t *testing.T) {
+	// Both the schema generator and pkg/celvalues detect expressions through these two helpers, so
+	// they cannot drift into disagreeing about what a chart author wrote.
+	for _, value := range []string{
+		"cel: values.host",
+		"cel:values.host",
+		"cel: values.host\n", // a block scalar keeps its trailing newline
+	} {
+		assert.True(t, parser.IsCelExpression(value), "%q is an expression", value)
+		assert.True(t, parser.LooksLikeCelExpression(value), "%q is an expression, so it also looks like one", value)
+	}
+
+	for _, value := range []string{"CEL: x", "Cel: x", " cel: x", "cel : x", "\tcel: x"} {
+		assert.False(t, parser.IsCelExpression(value), "%q is not an expression, the prefix is exact", value)
+		assert.True(t, parser.LooksLikeCelExpression(value), "%q is a near miss and has to be rejected, not shipped to Helm", value)
+	}
+
+	for _, value := range []string{"celery", "excel: sheet", "the cel: prefix is documented here", "", "cel"} {
+		assert.False(t, parser.IsCelExpression(value), "%q is a plain string", value)
+		assert.False(t, parser.LooksLikeCelExpression(value), "%q is a plain string", value)
+	}
+}
