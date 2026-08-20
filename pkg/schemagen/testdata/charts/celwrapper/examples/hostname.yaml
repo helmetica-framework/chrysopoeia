@@ -1,0 +1,10 @@
+apiVersion: v1.celwrapper.helmetica-bundles.io/bundle
+kind: CelWrapper
+metadata:
+  name: hostname
+spec:
+  version: 1.0.0
+  ociUrl: oci://example.com/celwrapper
+  values:
+    ingressHostname: example.com
+    replicas: 2
