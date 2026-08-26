@@ -198,6 +198,7 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 									Type:        "string",
 									Description: "The OCI repository where the service bundle is stored.",
 								},
+								"backup":   backupSchema(),
 								"provides": dependencyReferences("The list of dependency groups whose CRDs this service ships."),
 								"manages":  dependencyReferences("The dependency group whose CRDs the operator of this service manages."),
 								"requires": dependencyReferences("The list of dependency groups that this service consumes."),
@@ -226,6 +227,40 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 								"instanceNamespace": {
 									Type:        "string",
 									Description: "The namespace where the service is deployed in.",
+								},
+								"backup": {
+									Type:        "object",
+									Description: "The observed state of the service's backups.",
+									Properties: map[string]apiextv1.JSONSchemaProps{
+										"ready": {
+											Type:        "boolean",
+											Description: "Whether the service is currently being backed up.",
+										},
+										"mode": {
+											Type:        "string",
+											Description: "Who takes the backups, as resolved from `.spec.backup.mode`.",
+										},
+										"bucket": {
+											Type:        "string",
+											Description: "The bucket the backups are written to.",
+										},
+										"endpoint": {
+											Type:        "string",
+											Description: "The object storage endpoint the bucket lives behind.",
+										},
+										"credentialsSecret": {
+											Type:        "string",
+											Description: "The secret in the service's namespace holding the bucket credentials. A service that backs itself up reads its S3 access key from here.",
+										},
+										"schedule": {
+											Type:        "string",
+											Description: "The schedule the backups run on.",
+										},
+										"message": {
+											Type:        "string",
+											Description: "A human-readable description of the backup state.",
+										},
+									},
 								},
 							},
 						},
@@ -437,6 +472,73 @@ func guessTypeFromValue(value any) string {
 // dependencyReferences is the schema of a list of references to a DependencyGroup. The scope the
 // group is used under, and with it the label the harness proxy scopes the operator to, is the
 // group's name or, if set, its alias.
+// backupSchema is the backup configuration of a service. chrysopoeia only carries these
+// fields: they are reconciled by ampulla, which provisions a bucket over COSI and a k8up
+// schedule for every instance that enables them.
+func backupSchema() apiextv1.JSONSchemaProps {
+	retention := func(description string) apiextv1.JSONSchemaProps {
+		return apiextv1.JSONSchemaProps{
+			Type:        "integer",
+			Description: description,
+			Minimum:     ptr.To(float64(0)),
+		}
+	}
+
+	return apiextv1.JSONSchemaProps{
+		Type:        "object",
+		Description: "Backup configures whether and how the service's data is backed up.",
+		Default:     &apiextv1.JSON{Raw: []byte(`{"enabled":false}`)},
+		Properties: map[string]apiextv1.JSONSchemaProps{
+			"enabled": {
+				Type:        "boolean",
+				Description: "Whether the service's data is backed up.",
+				Default:     &apiextv1.JSON{Raw: []byte(`false`)},
+			},
+			"mode": {
+				Type: "string",
+				Description: "Who takes the backups. `Schedule` backs up the service's persistent volumes on a schedule. " +
+					"`BucketOnly` provisions the bucket and its credentials and leaves the backing up to the service itself, " +
+					"for services whose operator writes backups to object storage on its own; the bucket, its endpoint and the " +
+					"name of the credentials secret are published in `.status.backup`.",
+				Enum:    []apiextv1.JSON{{Raw: []byte(`"Schedule"`)}, {Raw: []byte(`"BucketOnly"`)}},
+				Default: &apiextv1.JSON{Raw: []byte(`"Schedule"`)},
+			},
+			"schedule": {
+				Type:        "string",
+				Description: "The schedule the backups run on, as a cron expression or one of k8up's shortcuts such as `@daily-random`. Defaults to the backup controller's schedule.",
+			},
+			"pruneSchedule": {
+				Type:        "string",
+				Description: "The schedule old backups are pruned on, as a cron expression or one of k8up's shortcuts. Defaults to the backup controller's schedule.",
+			},
+			"checkSchedule": {
+				Type:        "string",
+				Description: "The schedule the backup repository is checked on, as a cron expression or one of k8up's shortcuts. Defaults to the backup controller's schedule.",
+			},
+			"bucketClassName": {
+				Type:        "string",
+				Description: "The object storage the backups are written to, as the name of a COSI BucketClass. Defaults to the backup controller's bucket class.",
+			},
+			"bucketAccessClassName": {
+				Type:        "string",
+				Description: "The COSI BucketAccessClass the bucket credentials are minted from. Defaults to the backup controller's bucket access class.",
+			},
+			"retention": {
+				Type:        "object",
+				Description: "How many backups are kept. If none of these are set, the backup controller's default retention applies.",
+				Properties: map[string]apiextv1.JSONSchemaProps{
+					"keepLast":    retention("The number of most recent backups to keep."),
+					"keepHourly":  retention("The number of hourly backups to keep."),
+					"keepDaily":   retention("The number of daily backups to keep."),
+					"keepWeekly":  retention("The number of weekly backups to keep."),
+					"keepMonthly": retention("The number of monthly backups to keep."),
+					"keepYearly":  retention("The number of yearly backups to keep."),
+				},
+			},
+		},
+	}
+}
+
 func dependencyReferences(description string) apiextv1.JSONSchemaProps {
 	return apiextv1.JSONSchemaProps{
 		Type:        "array",

@@ -47,6 +47,83 @@ spec:
                     - Manual
                     type: string
                 type: object
+              backup:
+                default:
+                  enabled: false
+                description: Backup configures whether and how the service's data
+                  is backed up.
+                properties:
+                  bucketAccessClassName:
+                    description: The COSI BucketAccessClass the bucket credentials
+                      are minted from. Defaults to the backup controller's bucket
+                      access class.
+                    type: string
+                  bucketClassName:
+                    description: The object storage the backups are written to, as
+                      the name of a COSI BucketClass. Defaults to the backup controller's
+                      bucket class.
+                    type: string
+                  checkSchedule:
+                    description: The schedule the backup repository is checked on,
+                      as a cron expression or one of k8up's shortcuts. Defaults to
+                      the backup controller's schedule.
+                    type: string
+                  enabled:
+                    default: false
+                    description: Whether the service's data is backed up.
+                    type: boolean
+                  mode:
+                    default: Schedule
+                    description: Who takes the backups. `Schedule` backs up the service's
+                      persistent volumes on a schedule. `BucketOnly` provisions the
+                      bucket and its credentials and leaves the backing up to the
+                      service itself, for services whose operator writes backups to
+                      object storage on its own; the bucket, its endpoint and the
+                      name of the credentials secret are published in `.status.backup`.
+                    enum:
+                    - Schedule
+                    - BucketOnly
+                    type: string
+                  pruneSchedule:
+                    description: The schedule old backups are pruned on, as a cron
+                      expression or one of k8up's shortcuts. Defaults to the backup
+                      controller's schedule.
+                    type: string
+                  retention:
+                    description: How many backups are kept. If none of these are set,
+                      the backup controller's default retention applies.
+                    properties:
+                      keepDaily:
+                        description: The number of daily backups to keep.
+                        minimum: 0
+                        type: integer
+                      keepHourly:
+                        description: The number of hourly backups to keep.
+                        minimum: 0
+                        type: integer
+                      keepLast:
+                        description: The number of most recent backups to keep.
+                        minimum: 0
+                        type: integer
+                      keepMonthly:
+                        description: The number of monthly backups to keep.
+                        minimum: 0
+                        type: integer
+                      keepWeekly:
+                        description: The number of weekly backups to keep.
+                        minimum: 0
+                        type: integer
+                      keepYearly:
+                        description: The number of yearly backups to keep.
+                        minimum: 0
+                        type: integer
+                    type: object
+                  schedule:
+                    description: The schedule the backups run on, as a cron expression
+                      or one of k8up's shortcuts such as `@daily-random`. Defaults
+                      to the backup controller's schedule.
+                    type: string
+                type: object
               manages:
                 description: The dependency group whose CRDs the operator of this
                   service manages.
@@ -133,6 +210,33 @@ spec:
                 description: The name of the revision that is currently applied to
                   the cluster.
                 type: string
+              backup:
+                description: The observed state of the service's backups.
+                properties:
+                  bucket:
+                    description: The bucket the backups are written to.
+                    type: string
+                  credentialsSecret:
+                    description: The secret in the service's namespace holding the
+                      bucket credentials. A service that backs itself up reads its
+                      S3 access key from here.
+                    type: string
+                  endpoint:
+                    description: The object storage endpoint the bucket lives behind.
+                    type: string
+                  message:
+                    description: A human-readable description of the backup state.
+                    type: string
+                  mode:
+                    description: Who takes the backups, as resolved from `.spec.backup.mode`.
+                    type: string
+                  ready:
+                    description: Whether the service is currently being backed up.
+                    type: boolean
+                  schedule:
+                    description: The schedule the backups run on.
+                    type: string
+                type: object
               driftDetected:
                 description: Whether a drift was detected.
                 type: boolean
