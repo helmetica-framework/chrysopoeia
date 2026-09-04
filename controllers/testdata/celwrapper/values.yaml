@@ -1,0 +1,4 @@
+ingressHostname: ""
+podinfo:
+  ingress:
+    enabled: "cel: values.ingressHostname != ''"

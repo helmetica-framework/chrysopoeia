@@ -1,0 +1,13 @@
+# The hostname the service is reachable under. Leave empty to disable ingress.
+ingressHostname: ""
+
+# The number of replicas to run.
+replicas: 1
+
+podinfo:
+  ingress:
+    enabled: "cel: values.ingressHostname != ''"
+    hosts: "cel: values.ingressHostname == '' ? [] : [{'host': values.ingressHostname}]"
+    tls: |
+      cel: cel.bind(h, values.ingressHostname,
+        h == '' ? [] : [{'secretName': claim.name + '-tls', 'hosts': [h]}])

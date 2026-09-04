@@ -17,7 +17,6 @@ import (
 	"github.com/Masterminds/semver/v3"
 	imagereflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -34,6 +33,7 @@ import (
 
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	"github.com/helmetica-framework/chrysopoeia/pkg/breakagedetection"
+	"github.com/helmetica-framework/chrysopoeia/pkg/celvalues"
 	"github.com/helmetica-framework/chrysopoeia/pkg/schemagen"
 )
 
@@ -134,40 +134,18 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 
 	l.Info("OCIRepository is ready", "OCIRepository", source.Spec.Reference.Name, "ArtifactURL", chartURL)
 
-	if r.SourceControllerHostnameOverride != "" {
-		l.Info("Overriding source controller hostname", "OriginalURL", chartURL, "Override", r.SourceControllerHostnameOverride)
-		parsedURL, err := url.Parse(chartURL)
-		if err != nil {
-			l.Error(err, "Failed to parse chart URL", "ArtifactURL", chartURL)
-			return ctrl.Result{}, err
-		}
-		parsedURL.Host = r.SourceControllerHostnameOverride
-		chartURL = parsedURL.String()
-	}
-
-	httpResp, err := http.Get(chartURL)
-	if err != nil {
-		l.Error(err, "Failed to fetch artifact", "ArtifactURL", chartURL)
-		statusCondition.Reason = "ArtifactFetchFailed"
-		statusCondition.Message = fmt.Sprintf("Failed to fetch artifact from %s: %v", chartURL, err)
-		return ctrl.Result{}, err
-	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode != http.StatusOK {
-		l.Error(nil, "Failed to fetch artifact", "ArtifactURL", chartURL, "StatusCode", httpResp.StatusCode)
-		statusCondition.Reason = "ArtifactFetchFailed"
-		statusCondition.Message = fmt.Sprintf("Failed to fetch artifact from %s: status code %d", chartURL, httpResp.StatusCode)
-		return ctrl.Result{}, fmt.Errorf("failed to fetch artifact: %s", chartURL)
-	}
-
-	l.Info("Successfully requested artifact", "ArtifactURL", chartURL)
-
-	chart, err := loader.LoadArchive(httpResp.Body)
+	chart, err := fetchChart(ctx, chartURL, r.SourceControllerHostnameOverride)
 	if err != nil {
 		l.Error(err, "Failed to load chart", "ArtifactURL", chartURL)
 		statusCondition.Reason = "ChartLoadFailed"
-		statusCondition.Message = fmt.Sprintf("Failed to load chart from %s: %v", chartURL, err)
+		statusCondition.Message = fmt.Sprintf("Failed to load chart: %v", err)
+		return ctrl.Result{}, err
+	}
+
+	if _, err := celvalues.NewFromChart(chart); err != nil {
+		l.Error(err, "Failed to compile the cel: expressions of the chart")
+		statusCondition.Reason = "CelCompilationFailed"
+		statusCondition.Message = fmt.Sprintf("Failed to compile the cel: expressions of the chart: %v", err)
 		return ctrl.Result{}, err
 	}
 
@@ -211,7 +189,9 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 		// The controller switches to a gzipped file if the uncompressed file is larger than a few KB.
 		url.Path = fmt.Sprintf("/imagerepository/%s/%s/tags.txt", versionDiscoveryRepo.Namespace, versionDiscoveryRepo.Name)
 
-		resp, err := http.Get(url.String())
+		chartClient := &http.Client{Timeout: 2 * time.Minute}
+
+		resp, err := chartClient.Get(url.String())
 		if err != nil {
 			l.Error(err, "Failed to fetch tags from image reflector controller", "URL", url.String())
 			statusCondition.Reason = "VersionDiscoveryFetchFailed"

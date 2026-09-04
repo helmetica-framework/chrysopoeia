@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -107,4 +108,43 @@ func TestGenerateCRD_Golden(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestGenerateCRD_StatusConditions(t *testing.T) {
+	chartLoader, err := loader.Loader("./testdata/charts/celwrapper")
+	require.NoError(t, err)
+	chart, err := chartLoader.Load()
+	require.NoError(t, err)
+
+	crd, err := schemagen.GenerateCRD(*chart)
+	require.NoError(t, err)
+
+	schema := crd.Spec.Versions[0].Schema.OpenAPIV3Schema
+
+	values := schema.Properties["spec"].Properties["values"]
+	assert.NotContains(t, values.Properties, "podinfo",
+		"every field under podinfo is computed, so the key is not settable")
+	assert.Contains(t, values.Properties, "ingressHostname")
+	assert.Contains(t, values.Properties, "replicas")
+
+	conditions, ok := schema.Properties["status"].Properties["conditions"]
+	require.True(t, ok, "the claim status carries conditions")
+	assert.Equal(t, "array", conditions.Type)
+	require.NotNil(t, conditions.XListType, "a condition type appears at most once, which the API server enforces")
+	assert.Equal(t, "map", *conditions.XListType)
+	assert.Equal(t, []string{"type"}, conditions.XListMapKeys)
+
+	require.NotNil(t, conditions.Items)
+	require.NotNil(t, conditions.Items.Schema)
+	item := *conditions.Items.Schema
+	assert.Equal(t, "object", item.Type)
+	for _, field := range []string{"type", "status", "reason", "message", "lastTransitionTime", "observedGeneration"} {
+		assert.Contains(t, item.Properties, field, "metav1.Condition has a %s field", field)
+	}
+	assert.Equal(t, "date-time", item.Properties["lastTransitionTime"].Format)
+	assert.Equal(t, "integer", item.Properties["observedGeneration"].Type)
+	assert.Equal(t, "int64", item.Properties["observedGeneration"].Format)
+	assert.ElementsMatch(t,
+		[]string{"type", "status", "reason", "message", "lastTransitionTime"}, item.Required,
+		"everything metav1.Condition marks required, and only that")
 }

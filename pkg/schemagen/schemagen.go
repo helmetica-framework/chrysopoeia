@@ -14,10 +14,12 @@ import (
 	kubeyaml "sigs.k8s.io/yaml"
 )
 
-const CRDKindAnnotation = "crd.bundle.helmetica.io/kind"
-const CRDListKindAnnotation = "crd.bundle.helmetica.io/listKind"
-const CRDSingularAnnotation = "crd.bundle.helmetica.io/singular"
-const CRDPluralAnnotation = "crd.bundle.helmetica.io/plural"
+const (
+	CRDKindAnnotation     = "crd.bundle.helmetica.io/kind"
+	CRDListKindAnnotation = "crd.bundle.helmetica.io/listKind"
+	CRDSingularAnnotation = "crd.bundle.helmetica.io/singular"
+	CRDPluralAnnotation   = "crd.bundle.helmetica.io/plural"
+)
 
 var crdCategories = []string{"all", "claim", "helmetica"}
 
@@ -227,6 +229,46 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 									Type:        "string",
 									Description: "The namespace where the service is deployed in.",
 								},
+								"conditions": {
+									Type:         "array",
+									Description:  "Conditions holds the conditions of the service.",
+									XListType:    ptr.To("map"),
+									XListMapKeys: []string{"type"},
+									Items: &apiextv1.JSONSchemaPropsOrArray{
+										Schema: &apiextv1.JSONSchemaProps{
+											Type:     "object",
+											Required: []string{"type", "status", "reason", "message", "lastTransitionTime"},
+											Properties: map[string]apiextv1.JSONSchemaProps{
+												"type": {
+													Type:        "string",
+													Description: "Type of the condition.",
+												},
+												"status": {
+													Type:        "string",
+													Description: "Status of the condition, one of True, False or Unknown.",
+												},
+												"reason": {
+													Type:        "string",
+													Description: "A programmatic identifier for the condition's last transition.",
+												},
+												"message": {
+													Type:        "string",
+													Description: "A human readable message about the last transition.",
+												},
+												"lastTransitionTime": {
+													Type:        "string",
+													Format:      "date-time",
+													Description: "The last time the condition transitioned from one status to another.",
+												},
+												"observedGeneration": {
+													Type:        "integer",
+													Format:      "int64",
+													Description: "The generation of the claim the condition was set from.",
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
@@ -327,7 +369,7 @@ func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hint
 			return schema, nil
 		}
 
-		var props = make(map[string]apiextv1.JSONSchemaProps)
+		props := make(map[string]apiextv1.JSONSchemaProps)
 		for k, v := range typedNode {
 			if strings.HasPrefix(k, "#") {
 				continue
