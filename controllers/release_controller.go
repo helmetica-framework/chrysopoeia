@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -157,14 +158,19 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 
 func (r *ReleaseController) instanceNamespaceName(nsn types.NamespacedName) string {
 	gvkh := sha256.New()
-	_, _ = fmt.Fprint(gvkh, r.GVK.Group, r.GVK.Version, r.GVK.Kind)
-	name := fmt.Sprintf("x-%x-%s-%s", gvkh.Sum(nil)[:4], nsn.Namespace, nsn.Name)
-	if len(name) <= 63 {
-		return name
-	}
-	prefix := name[:63-9]
-	hash := sha256.Sum256([]byte(name))
-	return fmt.Sprintf("%s-%x", prefix, hash[:4])
+	idh := sha256.New()
+
+	// Fprint doesn't add any sperators between the operators if they are strings.
+	// Which could lead to subtle collisons. Adding a space in between avoids
+	// that since, a space is not valid in these fields.
+	_, _ = fmt.Fprintf(gvkh, "%s %s %s", r.GVK.Group, r.GVK.Version, r.GVK.Kind)
+	_, _ = fmt.Fprintf(idh, "%s %s %s %s %s", r.GVK.Group, r.GVK.Version, r.GVK.Kind, nsn.Namespace, nsn.Name)
+
+	kind := strings.ToLower(r.GVK.Kind)
+	kind = kind[:min(len(kind), 32)]
+	idHex := hex.EncodeToString(idh.Sum(nil))[:min(32, 48-len(kind))]
+
+	return fmt.Sprintf("helx-%s-%x-%s", kind, gvkh.Sum(nil)[:4], idHex)
 }
 
 func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName string) error {
@@ -314,10 +320,11 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		if !found {
 			return fmt.Errorf("invalid CRD name %q in a required dependency group", crd)
 		}
-		rbacRequires = append(rbacRequires, rbacv1ac.PolicyRule().
-			WithAPIGroups(group).
-			WithResources(resource).
-			WithVerbs("*"),
+		rbacRequires = append(
+			rbacRequires, rbacv1ac.PolicyRule().
+				WithAPIGroups(group).
+				WithResources(resource).
+				WithVerbs("*"),
 		)
 	}
 	requiresRoleName := strings.Join([]string{"chrysopoeia", "requires"}, ":")

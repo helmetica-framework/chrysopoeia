@@ -16,11 +16,11 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: proxy:scopedlist:x-ca688c00-default-operator:operator-mariadb-operator
+  name: proxy:scopedlist:helx-mariadboperator-f3a58bd2-c4f7c9e17b5e07c49201e2e5fb548766:operator-mariadb-operator
 subjects:
 - kind: ServiceAccount
   name: operator-mariadb-operator
-  namespace: x-ca688c00-default-operator
+  namespace: helx-mariadboperator-f3a58bd2-c4f7c9e17b5e07c49201e2e5fb548766
 roleRef:
   kind: ClusterRole
   name: scopedlist:requires.helmetica.io:mariadbs.k8s.mariadb.com
