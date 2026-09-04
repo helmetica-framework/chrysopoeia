@@ -16,7 +16,7 @@ import (
 //
 // CustomResourceDefinitionSource is the Schema for the bundlesources API.
 type CustomResourceDefinitionSourceApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
+	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                                 *CustomResourceDefinitionSourceSpecApplyConfiguration   `json:"spec,omitempty"`
 	Status                               *CustomResourceDefinitionSourceStatusApplyConfiguration `json:"status,omitempty"`

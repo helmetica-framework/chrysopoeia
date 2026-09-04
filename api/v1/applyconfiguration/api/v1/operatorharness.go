@@ -18,7 +18,7 @@ import (
 // It harnesses an operator that would otherwise require cluster-wide permissions by scoping its
 // access to resources carrying the label in `.spec.scopeToLabel`.
 type OperatorHarnessApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
+	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                                 *OperatorHarnessSpecApplyConfiguration   `json:"spec,omitempty"`
 	Status                               *OperatorHarnessStatusApplyConfiguration `json:"status,omitempty"`
