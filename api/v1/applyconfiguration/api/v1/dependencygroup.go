@@ -18,7 +18,7 @@ import (
 // It bundles the CustomResourceDefinitions of a service so that charts can depend on the group
 // instead of on individual CRDs, and ties them to the harness of the managing operator.
 type DependencyGroupApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
+	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                                 *DependencyGroupSpecApplyConfiguration   `json:"spec,omitempty"`
 	Status                               *DependencyGroupStatusApplyConfiguration `json:"status,omitempty"`

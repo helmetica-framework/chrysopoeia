@@ -16,7 +16,7 @@ import (
 //
 // InstanceRevision is the Schema for the bundlesources API.
 type InstanceRevisionApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
+	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                                 *InstanceRevisionSpecApplyConfiguration `json:"spec,omitempty"`
 	Status                               *apiv1.InstanceRevisionStatus           `json:"status,omitempty"`
