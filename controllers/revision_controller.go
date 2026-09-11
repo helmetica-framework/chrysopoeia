@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -65,6 +66,105 @@ func NewRevisionManager(sourceControllerHostnameOverride string) func() DynamicR
 	}
 }
 
+// resolveVersion is the version a revision is built from: what the user pinned in spec.version,
+// then what the framework selected in status.version, then what the instance is already running.
+// It reports "" when none of them decide, which only a claim with no revision yet does; the caller
+// falls back to the newest version the schema allows.
+//
+// current is what keeps a managed instance still. Without it, an edit to spec.values would rebuild
+// the instance against whatever is newest at that moment, carrying an upgrade nobody asked for.
+// With it, only a write to status.version moves an instance, and only adept writes that.
+func resolveVersion(claim unstructured.Unstructured, current string) (string, error) {
+	specv, _, err := unstructured.NestedString(claim.Object, "spec", "version")
+	if err != nil {
+		return "", fmt.Errorf("reading spec.version for %s/%s: %w", claim.GetNamespace(), claim.GetName(), err)
+	}
+
+	if specv != "" {
+		return specv, nil
+	}
+
+	statusv, _, err := unstructured.NestedString(claim.Object, "status", "version")
+	if err != nil {
+		return "", fmt.Errorf("reading status.version for %s/%s: %w", claim.GetNamespace(), claim.GetName(), err)
+	}
+
+	if statusv != "" {
+		return statusv, nil
+	}
+
+	return current, nil
+}
+
+// versionWithoutDigest is the version part of a revision's "version@digest".
+func versionWithoutDigest(revisionVersion string) string {
+	version, _, _ := strings.Cut(revisionVersion, "@")
+	return version
+}
+
+// newestVersion is the newest version a claim kind allows: the first entry of the spec.version enum
+// the CustomResourceDefinitionSource controller writes onto the generated CRD, which discovery sorts
+// newest first. The CRD is matched rather than named, since the name is plural.group and only the
+// CRD knows its own plural.
+func newestVersion(crds []apiextensionsv1.CustomResourceDefinition, gvk schema.GroupVersionKind) (string, error) {
+	c := slices.IndexFunc(crds, func(crd apiextensionsv1.CustomResourceDefinition) bool {
+		return crd.Spec.Group == gvk.Group && crd.Spec.Names.Kind == gvk.Kind
+	})
+	if c < 0 {
+		return "", fmt.Errorf("no CustomResourceDefinition for %s in %s", gvk.Kind, gvk.Group)
+	}
+
+	v := slices.IndexFunc(crds[c].Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) bool {
+		return version.Name == gvk.Version
+	})
+	if v < 0 {
+		return "", fmt.Errorf("%s has no version %s", crds[c].GetName(), gvk.Version)
+	}
+
+	props := crds[c].Spec.Versions[v].Schema
+	if props == nil || props.OpenAPIV3Schema == nil {
+		return "", fmt.Errorf("%s %s has no schema", gvk.Kind, gvk.Version)
+	}
+
+	spec, ok := props.OpenAPIV3Schema.Properties["spec"]
+	if !ok {
+		return "", fmt.Errorf("%s has no spec in its schema", gvk.Kind)
+	}
+
+	version, ok := spec.Properties["version"]
+	if !ok || len(version.Enum) == 0 {
+		return "", fmt.Errorf("%s has no versions to select from", gvk.Kind)
+	}
+
+	// The entries are raw JSON, so string(Raw) would keep the quotes.
+	var newest string
+	if err := json.Unmarshal(version.Enum[0].Raw, &newest); err != nil {
+		return "", fmt.Errorf("reading the newest version of %s: %w", gvk.Kind, err)
+	}
+
+	return newest, nil
+}
+
+func (r *RevisionManager) currentVersion(ctx context.Context, claim unstructured.Unstructured) (string, error) {
+	name, _, err := unstructured.NestedString(claim.Object, "status", "latestRevision")
+	if err != nil {
+		return "", fmt.Errorf("reading status.latestRevision: %w", err)
+	}
+	if name == "" {
+		return "", nil
+	}
+
+	var rev chrysopoeiav1.InstanceRevision
+	if err := r.Get(ctx, client.ObjectKey{Namespace: claim.GetNamespace(), Name: name}, &rev); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("getting revision %s: %w", name, err)
+	}
+
+	return versionWithoutDigest(rev.Spec.Version), nil
+}
+
 func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) (res ctrl.Result, err error) {
 	l := log.FromContext(ctx).WithName("RevisionManager.Reconcile").WithValues("request", req)
 	l.Info("Reconciling Claim")
@@ -95,11 +195,33 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 		l.Error(err, "Failed to get ociUrl from instance")
 		return ctrl.Result{}, err
 	}
-	version, _, err := unstructured.NestedString(claim.Object, "spec", "version")
+
+	current, err := r.currentVersion(ctx, claim)
 	if err != nil {
-		l.Error(err, "Failed to get version from instance")
+		l.Error(err, "Failed to get the version the instance is running")
 		return ctrl.Result{}, err
 	}
+
+	version, err := resolveVersion(claim, current)
+	if err != nil {
+		l.Error(err, "Failed to resolve the version from the instance")
+		return ctrl.Result{}, err
+	}
+
+	if version == "" {
+		var crds apiextensionsv1.CustomResourceDefinitionList
+		if err := r.List(ctx, &crds); err != nil {
+			l.Error(err, "Failed to list CustomResourceDefinitions")
+			return ctrl.Result{}, err
+		}
+
+		version, err = newestVersion(crds.Items, claim.GroupVersionKind())
+		if err != nil {
+			l.Error(err, "Failed to get the newest version the instance may run")
+			return ctrl.Result{}, err
+		}
+	}
+
 	values, _, err := unstructured.NestedMap(claim.Object, "spec", "values")
 	if err != nil {
 		l.Error(err, "Failed to get values from instance")
