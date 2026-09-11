@@ -297,9 +297,6 @@ func (r *CustomResourceDefinitionSourceManager) Reconcile(ctx context.Context, r
 					}
 					versionProp.Enum[i] = apiextv1.JSON{Raw: tagJSON}
 				}
-				if len(versionProp.Enum) > 0 {
-					versionProp.Default = versionProp.Enum[0].DeepCopy()
-				}
 				spec.Properties["version"] = versionProp
 				crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"] = spec
 			} else {
