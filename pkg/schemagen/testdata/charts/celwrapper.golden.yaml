@@ -1,18 +1,18 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: publicprivateexports.v3.juiceshop.helmetica-bundles.io
+  name: celwrappers.v1.celwrapper.helmetica-bundles.io
 spec:
-  group: v3.juiceshop.helmetica-bundles.io
+  group: v1.celwrapper.helmetica-bundles.io
   names:
     categories:
     - all
     - claim
     - helmetica
-    kind: PublicPrivateExport
-    listKind: PublicPrivateExportList
-    plural: publicprivateexports
-    singular: publicprivateexport
+    kind: CelWrapper
+    listKind: CelWrapperList
+    plural: celwrappers
+    singular: celwrapper
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -122,39 +122,13 @@ spec:
                   the configuration of the service. Every change to either of these
                   two fields creates a new revision of the service.
                 properties:
-                  default:
+                  ingressHostname:
+                    description: The hostname the service is reachable under. Leave
+                      empty to disable ingress.
                     type: string
-                  nested:
-                    properties:
-                      a:
-                        properties:
-                          b:
-                            properties:
-                              c:
-                                type: string
-                            type: object
-                        type: object
-                    type: object
-                  privateNested:
-                    properties:
-                      d:
-                        properties:
-                          e:
-                            properties:
-                              f:
-                                type: string
-                            type: object
-                        type: object
-                      inheritanceinarray:
-                        items:
-                          properties:
-                            g:
-                              type: string
-                          type: object
-                        type: array
-                    type: object
-                  public:
-                    type: string
+                  replicas:
+                    description: The number of replicas to run.
+                    type: integer
                 type: object
               version:
                 description: The version of the service. Every change to this field

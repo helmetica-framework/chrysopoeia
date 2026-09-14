@@ -22,3 +22,4 @@ kubectl get crds podinfos.v6.podinfo.helmetica-bundles.io
 
 * [schemagen](https://pkg.go.dev/github.com/helmetica-framework/chrysopoeia/pkg/schemagen) - Generate CRDs from Helm charts.
 * [breakagedetection](https://pkg.go.dev/github.com/helmetica-framework/chrysopoeia/pkg/breakagedetection) - Detect breaking changes between CRD versions.
+* [celvalues](https://pkg.go.dev/github.com/helmetica-framework/chrysopoeia/pkg/celvalues) - Evaluate the CEL expressions in a wrapper chart's values.yaml.

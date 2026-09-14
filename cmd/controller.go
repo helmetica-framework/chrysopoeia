@@ -303,7 +303,7 @@ func runController(cmd *cobra.Command, _ []string) error {
 
 		ControllerLifetimeCtx: lifetimeCtx,
 		ManagedReconcilers: []func() controllers.DynamicReconciler{
-			controllers.NewRevisionManager,
+			controllers.NewRevisionManager(sourceControllerHostnameOverride),
 			controllers.NewAutomaticApprovalManager,
 			controllers.NewReleaseController,
 		},

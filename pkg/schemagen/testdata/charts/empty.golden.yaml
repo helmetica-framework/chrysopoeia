@@ -135,6 +135,45 @@ spec:
                 description: The name of the revision that is currently applied to
                   the cluster.
                 type: string
+              conditions:
+                description: Conditions holds the conditions of the service.
+                items:
+                  properties:
+                    lastTransitionTime:
+                      description: The last time the condition transitioned from one
+                        status to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message about the last transition.
+                      type: string
+                    observedGeneration:
+                      description: The generation of the claim the condition was set
+                        from.
+                      format: int64
+                      type: integer
+                    reason:
+                      description: A programmatic identifier for the condition's last
+                        transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False or
+                        Unknown.
+                      type: string
+                    type:
+                      description: Type of the condition.
+                      type: string
+                  required:
+                  - type
+                  - status
+                  - reason
+                  - message
+                  - lastTransitionTime
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               driftDetected:
                 description: Whether a drift was detected.
                 type: boolean
