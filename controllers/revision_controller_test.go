@@ -10,7 +10,10 @@ import (
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestSetClaimCondition_OnAClaimWithoutStatus(t *testing.T) {
@@ -173,20 +176,57 @@ func claimCRD(gvk schema.GroupVersionKind, versions ...string) apiextv1.CustomRe
 	}
 }
 
-func TestNewestVersion_TakesTheFirstEnumEntry(t *testing.T) {
+// revisionManagerWithCRDs is a RevisionManager backed by a client that indexes CRDs the way the
+// manager does, so a lookup by group and kind resolves.
+func revisionManagerWithCRDs(t *testing.T, crds ...apiextv1.CustomResourceDefinition) *RevisionManager {
+	t.Helper()
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, apiextv1.AddToScheme(scheme))
+
+	objs := make([]client.Object, len(crds))
+	for i := range crds {
+		objs[i] = &crds[i]
+	}
+
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithIndex(&apiextv1.CustomResourceDefinition{}, crdGroupKindField, indexCRDByGroupKind).
+		WithObjects(objs...).
+		Build()
+
+	return &RevisionManager{Client: c}
+}
+
+func TestNewestAllowedVersion_TakesTheFirstEnumEntry(t *testing.T) {
 	// Discovery sorts descending, so the first entry is the newest and nothing
 	// here sorts anything.
 	other := claimCRD(schema.GroupVersionKind{Group: "other.io", Version: "bundle", Kind: "Other"}, "9.9.9")
-	crds := []apiextv1.CustomResourceDefinition{other, claimCRD(juiceshopGVK(), "2.1.0", "2.0.0")}
+	r := revisionManagerWithCRDs(t, other, claimCRD(juiceshopGVK(), "2.1.0", "2.0.0"))
 
-	got, err := newestVersion(crds, juiceshopGVK())
+	got, err := r.newestAllowedVersion(t.Context(), juiceshopGVK())
 
 	require.NoError(t, err)
 	assert.Equal(t, "2.1.0", got, "and unquoted: the enum entries are raw JSON")
 }
 
-func TestNewestVersion_NoCRDForTheKindIsAnError(t *testing.T) {
-	got, err := newestVersion(nil, juiceshopGVK())
+func TestNewestAllowedVersion_PicksTheCRDOfTheClaimsOwnKind(t *testing.T) {
+	// Same kind in another group, and same group under another kind: neither
+	// may answer for the claim.
+	sameKind := claimCRD(schema.GroupVersionKind{Group: "other.io", Version: "bundle", Kind: "Juiceshop"}, "9.9.9")
+	sameGroup := claimCRD(schema.GroupVersionKind{Group: juiceshopGVK().Group, Version: "bundle", Kind: "Other"}, "8.8.8")
+	r := revisionManagerWithCRDs(t, sameKind, sameGroup, claimCRD(juiceshopGVK(), "2.1.0"))
+
+	got, err := r.newestAllowedVersion(t.Context(), juiceshopGVK())
+
+	require.NoError(t, err)
+	assert.Equal(t, "2.1.0", got)
+}
+
+func TestNewestAllowedVersion_NoCRDForTheKindIsAnError(t *testing.T) {
+	r := revisionManagerWithCRDs(t)
+
+	got, err := r.newestAllowedVersion(t.Context(), juiceshopGVK())
 
 	require.Error(t, err)
 	assert.Empty(t, got)
@@ -199,7 +239,7 @@ func TestNewestVersion_AnotherServedVersionIsNotUsed(t *testing.T) {
 	crd := claimCRD(juiceshopGVK(), "2.1.0")
 	crd.Spec.Versions[0].Name = "bundlev2"
 
-	_, err := newestVersion([]apiextv1.CustomResourceDefinition{crd}, juiceshopGVK())
+	_, err := newestVersion(crd, juiceshopGVK())
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "bundle")
@@ -208,7 +248,7 @@ func TestNewestVersion_AnotherServedVersionIsNotUsed(t *testing.T) {
 func TestNewestVersion_AnEmptyEnumIsAnError(t *testing.T) {
 	// Discovery found nothing. Returning "" would build a revision against
 	// whatever tag the registry resolves by default.
-	_, err := newestVersion([]apiextv1.CustomResourceDefinition{claimCRD(juiceshopGVK())}, juiceshopGVK())
+	_, err := newestVersion(claimCRD(juiceshopGVK()), juiceshopGVK())
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Juiceshop")

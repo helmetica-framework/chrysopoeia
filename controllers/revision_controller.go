@@ -102,26 +102,33 @@ func versionWithoutDigest(revisionVersion string) string {
 	return version
 }
 
-// newestVersion is the newest version a claim kind allows: the first entry of the spec.version enum
-// the CustomResourceDefinitionSource controller writes onto the generated CRD, which discovery sorts
-// newest first. The CRD is matched rather than named, since the name is plural.group and only the
-// CRD knows its own plural.
-func newestVersion(crds []apiextensionsv1.CustomResourceDefinition, gvk schema.GroupVersionKind) (string, error) {
-	c := slices.IndexFunc(crds, func(crd apiextensionsv1.CustomResourceDefinition) bool {
-		return crd.Spec.Group == gvk.Group && crd.Spec.Names.Kind == gvk.Kind
-	})
-	if c < 0 {
+// newestAllowedVersion is the newest version the claim's own CRD allows. The CRD is looked up
+// through the group/kind index rather than by name, since the name is plural.group and only the CRD
+// knows its own plural.
+func (r *RevisionManager) newestAllowedVersion(ctx context.Context, gvk schema.GroupVersionKind) (string, error) {
+	var crds apiextensionsv1.CustomResourceDefinitionList
+	if err := r.List(ctx, &crds, client.MatchingFields{crdGroupKindField: crdGroupKindIndexKey(gvk.GroupKind())}); err != nil {
+		return "", fmt.Errorf("listing CustomResourceDefinitions for %s: %w", gvk.GroupKind(), err)
+	}
+	if len(crds.Items) == 0 {
 		return "", fmt.Errorf("no CustomResourceDefinition for %s in %s", gvk.Kind, gvk.Group)
 	}
 
-	v := slices.IndexFunc(crds[c].Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) bool {
+	return newestVersion(crds.Items[0], gvk)
+}
+
+// newestVersion is the newest version a claim kind allows: the first entry of the spec.version enum
+// the CustomResourceDefinitionSource controller writes onto the generated CRD, which discovery sorts
+// newest first.
+func newestVersion(crd apiextensionsv1.CustomResourceDefinition, gvk schema.GroupVersionKind) (string, error) {
+	v := slices.IndexFunc(crd.Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) bool {
 		return version.Name == gvk.Version
 	})
 	if v < 0 {
-		return "", fmt.Errorf("%s has no version %s", crds[c].GetName(), gvk.Version)
+		return "", fmt.Errorf("%s has no version %s", crd.GetName(), gvk.Version)
 	}
 
-	props := crds[c].Spec.Versions[v].Schema
+	props := crd.Spec.Versions[v].Schema
 	if props == nil || props.OpenAPIV3Schema == nil {
 		return "", fmt.Errorf("%s %s has no schema", gvk.Kind, gvk.Version)
 	}
@@ -209,13 +216,7 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 	}
 
 	if version == "" {
-		var crds apiextensionsv1.CustomResourceDefinitionList
-		if err := r.List(ctx, &crds); err != nil {
-			l.Error(err, "Failed to list CustomResourceDefinitions")
-			return ctrl.Result{}, err
-		}
-
-		version, err = newestVersion(crds.Items, claim.GroupVersionKind())
+		version, err = r.newestAllowedVersion(ctx, claim.GroupVersionKind())
 		if err != nil {
 			l.Error(err, "Failed to get the newest version the instance may run")
 			return ctrl.Result{}, err
