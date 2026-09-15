@@ -436,6 +436,11 @@ spec:
               releaseStatus:
                 description: The current status of the service.
                 type: string
+              version:
+                description: The version the framework selected for this service.
+                  Set spec.version to pin a version instead, which takes precedence
+                  over this one.
+                type: string
             type: object
         type: object
     served: true

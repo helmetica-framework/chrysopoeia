@@ -269,6 +269,10 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 										},
 									},
 								},
+								"version": {
+									Type:        "string",
+									Description: "The version the framework selected for this service. Set spec.version to pin a version instead, which takes precedence over this one.",
+								},
 							},
 						},
 					},
