@@ -257,6 +257,10 @@ func runController(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("unable to set up InstanceRevision owner field index: %w", err)
 	}
 
+	if err := controllers.SetupCustomResourceDefinitionGroupKindFieldIndex(mgr); err != nil {
+		return fmt.Errorf("unable to set up CustomResourceDefinition group/kind field index: %w", err)
+	}
+
 	bsm := &controllers.CustomResourceDefinitionSourceManager{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
