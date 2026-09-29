@@ -152,7 +152,7 @@ func claimCRD(gvk schema.GroupVersionKind, versions ...string) apiextv1.CustomRe
 	}
 
 	return apiextv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{Name: strings.ToLower(gvk.Kind) + "s." + gvk.Group},
+		Name: strings.ToLower(gvk.Kind) + "s." + gvk.Group,
 		Spec: apiextv1.CustomResourceDefinitionSpec{
 			Group: gvk.Group,
 			Names: apiextv1.CustomResourceDefinitionNames{Kind: gvk.Kind},

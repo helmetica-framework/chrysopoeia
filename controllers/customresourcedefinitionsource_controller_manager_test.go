@@ -64,10 +64,8 @@ func crdSource(t *testing.T, name, created string, provides ...string) chrysopoe
 	}
 
 	return chrysopoeiav1.CustomResourceDefinitionSource{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              name,
-			CreationTimestamp: metav1.NewTime(mustParseTime(t, created)),
-		},
-		Spec: chrysopoeiav1.CustomResourceDefinitionSourceSpec{Provides: provided},
+		Name:              name,
+		CreationTimestamp: metav1.NewTime(mustParseTime(t, created)),
+		Spec:              chrysopoeiav1.CustomResourceDefinitionSourceSpec{Provides: provided},
 	}
 }

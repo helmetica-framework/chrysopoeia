@@ -177,8 +177,8 @@ func extractProvidesLabel(ns corev1.Namespace) []string {
 func extractPrefixedLabel(ns corev1.Namespace, prefix string) []string {
 	values := make([]string, 0, len(ns.Labels))
 	for k := range ns.Labels {
-		if strings.HasPrefix(k, prefix) {
-			values = append(values, strings.TrimPrefix(k, prefix))
+		if after, ok := strings.CutPrefix(k, prefix); ok {
+			values = append(values, after)
 		}
 	}
 	return values

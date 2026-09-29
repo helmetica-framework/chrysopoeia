@@ -232,7 +232,7 @@ func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomRe
 								"conditions": {
 									Type:         "array",
 									Description:  "Conditions holds the conditions of the service.",
-									XListType:    ptr.To("map"),
+									XListType:    new("map"),
 									XListMapKeys: []string{"type"},
 									Items: &apiextv1.JSONSchemaPropsOrArray{
 										Schema: &apiextv1.JSONSchemaProps{

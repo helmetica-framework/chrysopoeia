@@ -64,11 +64,9 @@ func dependencyGroup(t *testing.T, name, created string, crds ...string) chrysop
 	}
 
 	return chrysopoeiav1.DependencyGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              name,
-			CreationTimestamp: metav1.NewTime(mustParseTime(t, created)),
-		},
-		Spec: chrysopoeiav1.DependencyGroupSpec{CRDs: claimed},
+		Name:              name,
+		CreationTimestamp: metav1.NewTime(mustParseTime(t, created)),
+		Spec:              chrysopoeiav1.DependencyGroupSpec{CRDs: claimed},
 	}
 }
 

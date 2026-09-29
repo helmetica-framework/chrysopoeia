@@ -76,8 +76,8 @@ func (v *ObjWithHints) UnmarshalJSONFrom(d *jsontext.Decoder) error {
 		if err := json.Unmarshal(rawKey, &key); err != nil {
 			return fmt.Errorf("failed to unmarshal key: %w", err)
 		}
-		if strings.HasPrefix(key, "#") {
-			key = strings.TrimPrefix(key, "#")
+		if after, ok := strings.CutPrefix(key, "#"); ok {
+			key = after
 			var h Hint
 			if err := json.UnmarshalDecode(d, &h); err != nil {
 				return fmt.Errorf("failed to unmarshal hint for key %s: %w", key, err)

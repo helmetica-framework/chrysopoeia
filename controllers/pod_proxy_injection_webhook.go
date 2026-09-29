@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -104,7 +103,7 @@ func injectProxyConfiguration(spec *corev1.PodSpec, proxy ProxyInjection) {
 	// Kubernetes only skips projecting the service account token if this is false. The in-tree
 	// service account admission plugin runs before this webhook though, so its volume is replaced
 	// below instead of being prevented.
-	spec.AutomountServiceAccountToken = ptr.To(false)
+	spec.AutomountServiceAccountToken = new(false)
 
 	replacedVolumes := make(map[string]bool)
 	for _, container := range allContainers(spec) {
@@ -147,29 +146,27 @@ func injectProxyConfiguration(spec *corev1.PodSpec, proxy ProxyInjection) {
 func proxyAPIAccessVolume() corev1.Volume {
 	return corev1.Volume{
 		Name: proxyAPIAccessVolumeName,
-		VolumeSource: corev1.VolumeSource{
-			Projected: &corev1.ProjectedVolumeSource{
-				DefaultMode: ptr.To[int32](420),
-				Sources: []corev1.VolumeProjection{
-					{
-						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-							ExpirationSeconds: ptr.To(serviceAccountTokenExpirationSeconds),
-							Path:              "token",
-						},
+		Projected: &corev1.ProjectedVolumeSource{
+			DefaultMode: new(int32(420)),
+			Sources: []corev1.VolumeProjection{
+				{
+					ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+						ExpirationSeconds: new(serviceAccountTokenExpirationSeconds),
+						Path:              "token",
 					},
-					{
-						ConfigMap: &corev1.ConfigMapProjection{
-							LocalObjectReference: corev1.LocalObjectReference{Name: ProxyCAConfigMapName},
-							Items:                []corev1.KeyToPath{{Key: ProxyCACertKey, Path: "ca.crt"}},
-						},
+				},
+				{
+					ConfigMap: &corev1.ConfigMapProjection{
+						Name:  ProxyCAConfigMapName,
+						Items: []corev1.KeyToPath{{Key: ProxyCACertKey, Path: "ca.crt"}},
 					},
-					{
-						DownwardAPI: &corev1.DownwardAPIProjection{
-							Items: []corev1.DownwardAPIVolumeFile{{
-								Path:     "namespace",
-								FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.namespace"},
-							}},
-						},
+				},
+				{
+					DownwardAPI: &corev1.DownwardAPIProjection{
+						Items: []corev1.DownwardAPIVolumeFile{{
+							Path:     "namespace",
+							FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.namespace"},
+						}},
 					},
 				},
 			},

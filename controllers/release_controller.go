@@ -176,7 +176,7 @@ func (r *ReleaseController) instanceNamespaceName(nsn types.NamespacedName) stri
 func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName string) error {
 	log.FromContext(ctx).WithName("cleanupRelease").Info("Cleaning up release", "namespace", helmNSName)
 
-	if err := r.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: helmNSName}}); err != nil && !apierrors.IsNotFound(err) {
+	if err := r.Delete(ctx, &corev1.Namespace{Name: helmNSName}); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 
@@ -478,7 +478,7 @@ func (r *ReleaseController) SetupDynamicControllerWithWatches(dynCtrl controller
 		instanceNamespace := a["chrysopoeia.io/claim-namespace"]
 		if instanceName != "" && instanceNamespace != "" {
 			return []reconcile.Request{
-				{NamespacedName: client.ObjectKey{Namespace: instanceNamespace, Name: instanceName}},
+				{Namespace: instanceNamespace, Name: instanceName},
 			}
 		}
 		return nil

@@ -110,7 +110,7 @@ func jsonValue(val ref.Val) (any, error) {
 		return jsonMap(v)
 	}
 
-	native, err := val.ConvertToNative(reflect.TypeOf(""))
+	native, err := val.ConvertToNative(reflect.TypeFor[string]())
 	if err != nil {
 		return nil, fmt.Errorf("the result is not representable in JSON: %w", err)
 	}

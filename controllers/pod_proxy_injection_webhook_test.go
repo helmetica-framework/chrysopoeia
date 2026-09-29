@@ -6,8 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 )
@@ -40,15 +38,14 @@ func TestInjectProxyConfiguration(t *testing.T) {
 		}},
 		Volumes: []corev1.Volume{
 			{Name: "config"},
-			{Name: "kube-api-access-abcde", VolumeSource: corev1.VolumeSource{
-				Projected: &corev1.ProjectedVolumeSource{},
-			}},
+			{Name: "kube-api-access-abcde",
+				Projected: &corev1.ProjectedVolumeSource{}},
 		},
 	}
 
 	injectProxyConfiguration(&spec, testProxy)
 
-	assert.Equal(t, ptr.To(false), spec.AutomountServiceAccountToken,
+	assert.Equal(t, new(false), spec.AutomountServiceAccountToken,
 		"Kubernetes must not project its own service account volume")
 	assert.Equal(t, "operator-mariadb-operator", spec.ServiceAccountName,
 		"the token still authenticates the operator, the service account must be kept")
@@ -171,7 +168,7 @@ func TestHarnessesServiceAccount(t *testing.T) {
 
 func harness(name, namespace string, injectProxyConfiguration bool, serviceAccounts ...string) chrysopoeiav1.OperatorHarness {
 	return chrysopoeiav1.OperatorHarness{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Name: name,
 		Spec: chrysopoeiav1.OperatorHarnessSpec{
 			ScopeToLabel: RequiresLabelPrefix + name,
 			Operator: chrysopoeiav1.OperatorHarnessOperator{

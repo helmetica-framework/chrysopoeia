@@ -404,9 +404,9 @@ func (se *scopeExtractor) getScopeLabel(header http.Header, username string) (st
 	// we can trust the header.
 	if lbl := header.Get(ScopeHeader); lbl != "" {
 		injectedLabel = lbl
-	} else if strings.HasPrefix(username, "system:serviceaccount:") {
+	} else if after, ok := strings.CutPrefix(username, "system:serviceaccount:"); ok {
 		// If the user is a service account, we can get the scope from an annotation on the service account. This is a fallback for when the request doesn't have the scope header.
-		ns, name, ok := strings.Cut(strings.TrimPrefix(username, "system:serviceaccount:"), ":")
+		ns, name, ok := strings.Cut(after, ":")
 		if !ok {
 			return "", fmt.Errorf("failed to parse service account username, missing ':' in %q", username)
 		}

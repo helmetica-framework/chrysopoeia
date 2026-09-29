@@ -72,22 +72,18 @@ func Test_Proxy(t *testing.T) {
 		require.Len(t, nss.Items, 0)
 
 		_, err = adminClientset.CoreV1().Namespaces().Create(t.Context(), &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "test-namespace-",
-				Labels: map[string]string{
-					testScope:    "",
-					"test-label": "test-value",
-				},
+			GenerateName: "test-namespace-",
+			Labels: map[string]string{
+				testScope:    "",
+				"test-label": "test-value",
 			},
 		}, metav1.CreateOptions{})
 		require.NoError(t, err)
 		_, err = adminClientset.CoreV1().Namespaces().Create(t.Context(), &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "test-namespace-",
-				Labels: map[string]string{
-					"other-scope": "",
-					"test-label":  "test-value",
-				},
+			GenerateName: "test-namespace-",
+			Labels: map[string]string{
+				"other-scope": "",
+				"test-label":  "test-value",
 			},
 		}, metav1.CreateOptions{})
 		require.NoError(t, err)
@@ -241,9 +237,7 @@ func setupHarnessedControllerRBAC(t *testing.T, adminClientset *kubernetes.Clien
 	require.NoError(t, err)
 
 	role, err := adminClientset.RbacV1().Roles("default").Create(t.Context(), &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "harnessed-controller-role",
-		},
+		Name: "harnessed-controller-role",
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{""},
@@ -255,10 +249,8 @@ func setupHarnessedControllerRBAC(t *testing.T, adminClientset *kubernetes.Clien
 	require.NoError(t, err)
 
 	roleBinding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "harnessed-controller-role-binding",
-			Namespace: "default",
-		},
+		Name:      "harnessed-controller-role-binding",
+		Namespace: "default",
 		Subjects: []rbacv1.Subject{
 			{
 				Kind: "User",
@@ -275,9 +267,7 @@ func setupHarnessedControllerRBAC(t *testing.T, adminClientset *kubernetes.Clien
 	require.NoError(t, err)
 
 	cr, err := adminClientset.RbacV1().ClusterRoles().Create(t.Context(), &rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "harnessed-controller-role-",
-		},
+		GenerateName: "harnessed-controller-role-",
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups:     []string{""},
@@ -290,9 +280,7 @@ func setupHarnessedControllerRBAC(t *testing.T, adminClientset *kubernetes.Clien
 	require.NoError(t, err)
 
 	_, err = adminClientset.RbacV1().ClusterRoleBindings().Create(t.Context(), &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "harnessed-controller-role-binding",
-		},
+		Name: "harnessed-controller-role-binding",
 		Subjects: []rbacv1.Subject{
 			{
 				Kind: "User",
@@ -316,9 +304,7 @@ func setupProxyRBAC(t *testing.T, adminClientset *kubernetes.Clientset, proxySAN
 	_, err := adminClientset.RbacV1().ClusterRoles().Create(t.Context(), &proxyRole, metav1.CreateOptions{})
 	require.NoError(t, err)
 	proxyRoleBinding := rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "proxy-role-binding",
-		},
+		Name: "proxy-role-binding",
 		Subjects: []rbacv1.Subject{
 			{
 				Kind: "User",
