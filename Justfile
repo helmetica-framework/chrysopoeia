@@ -1,7 +1,5 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-export GOEXPERIMENT := "jsonv2"
-
 img_tag := env("IMG_TAG", "latest")
 bin_filename := env("BIN_FILENAME", "chrysopoeia")
 localbin := justfile_directory() / "bin"
