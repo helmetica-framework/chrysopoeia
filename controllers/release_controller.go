@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -62,8 +61,6 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	l := log.FromContext(ctx).WithName("ReleaseController.Reconcile").WithValues("request", req)
 	l.Info("Reconciling Claim")
 
-	instanceNSName := r.instanceNamespaceName(req.NamespacedName)
-
 	var claim unstructured.Unstructured
 	claim.SetAPIVersion(r.GVK.GroupVersion().String())
 	claim.SetKind(r.GVK.Kind)
@@ -76,6 +73,9 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	if !claim.GetDeletionTimestamp().IsZero() {
 		return ctrl.Result{}, nil
 	}
+
+	instanceNSName := r.instanceNamespaceName(claim.GetUID())
+
 	{
 		var ns corev1.Namespace
 		if err := r.Get(ctx, client.ObjectKey{Name: instanceNSName}, &ns); err != nil && !apierrors.IsNotFound(err) {
@@ -156,21 +156,19 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	return ctrl.Result{}, nil
 }
 
-func (r *ReleaseController) instanceNamespaceName(nsn types.NamespacedName) string {
+func (r *ReleaseController) instanceNamespaceName(uid types.UID) string {
 	gvkh := sha256.New()
-	idh := sha256.New()
 
 	// Fprint doesn't add any sperators between the operators if they are strings.
 	// Which could lead to subtle collisons. Adding a space in between avoids
 	// that since, a space is not valid in these fields.
 	_, _ = fmt.Fprintf(gvkh, "%s %s %s", r.GVK.Group, r.GVK.Version, r.GVK.Kind)
-	_, _ = fmt.Fprintf(idh, "%s %s %s %s %s", r.GVK.Group, r.GVK.Version, r.GVK.Kind, nsn.Namespace, nsn.Name)
 
 	kind := strings.ToLower(r.GVK.Kind)
 	kind = kind[:min(len(kind), 32)]
-	idHex := hex.EncodeToString(idh.Sum(nil))[:min(32, 48-len(kind))]
+	idHex := uid[:min(32, 48-len(kind))]
 
-	return fmt.Sprintf("helx-%s-%x-%s", kind, gvkh.Sum(nil)[:4], idHex)
+	return strings.TrimSuffix(fmt.Sprintf("helx-%s-%x-%s", kind, gvkh.Sum(nil)[:4], idHex), "-")
 }
 
 func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName string) error {
