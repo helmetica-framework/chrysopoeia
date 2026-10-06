@@ -26,6 +26,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -54,6 +55,8 @@ type ReleaseController struct {
 
 //+kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update;patch;create
 
+const InstanceCleanupFinalizer = "chrysopoeia.io/instance-cleanup"
+
 func NewReleaseController() DynamicReconciler {
 	return &ReleaseController{}
 }
@@ -68,13 +71,21 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	claim.SetAPIVersion(r.GVK.GroupVersion().String())
 	claim.SetKind(r.GVK.Kind)
 	if err := r.Get(ctx, req.NamespacedName, &claim); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, r.cleanupRelease(ctx, instanceNSName)
-		}
-		return ctrl.Result{}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !claim.GetDeletionTimestamp().IsZero() {
-		return ctrl.Result{}, nil
+		done, err := r.cleanupRelease(ctx, instanceNSName)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if done && controllerutil.ContainsFinalizer(&claim, InstanceCleanupFinalizer) {
+			if err := r.patchFinalizers(ctx, &claim, []string{}); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
+	if err := r.patchFinalizers(ctx, &claim, []string{InstanceCleanupFinalizer}); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to add finalizer %q: %w", InstanceCleanupFinalizer, err)
 	}
 	{
 		var ns corev1.Namespace
@@ -156,6 +167,17 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 	return ctrl.Result{}, nil
 }
 
+func (r *ReleaseController) patchFinalizers(ctx context.Context, claimRef client.Object, finalizers []string) error {
+	finalizerPatch := &unstructured.Unstructured{}
+	finalizerPatch.SetGroupVersionKind(claimRef.GetObjectKind().GroupVersionKind())
+	finalizerPatch.SetName(claimRef.GetName())
+	finalizerPatch.SetNamespace(claimRef.GetNamespace())
+	finalizerPatch.SetFinalizers(finalizers)
+	finalizerPatch.SetUID(claimRef.GetUID()) // ensures we're not recreating the already deleted object because the cache has not yet caught up
+
+	return r.Apply(ctx, client.ApplyConfigurationFromUnstructured(finalizerPatch), client.FieldOwner("chrysopoeia:release-controller:finalizers"))
+}
+
 func (r *ReleaseController) instanceNamespaceName(nsn types.NamespacedName) string {
 	gvkh := sha256.New()
 	idh := sha256.New()
@@ -173,20 +195,31 @@ func (r *ReleaseController) instanceNamespaceName(nsn types.NamespacedName) stri
 	return fmt.Sprintf("helx-%s-%x-%s", kind, gvkh.Sum(nil)[:4], idHex)
 }
 
-func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName string) error {
+func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName string) (done bool, err error) {
 	log.FromContext(ctx).WithName("cleanupRelease").Info("Cleaning up release", "namespace", helmNSName)
 
-	if err := r.Delete(ctx, &corev1.Namespace{Name: helmNSName}); err != nil && !apierrors.IsNotFound(err) {
-		return err
+	var nsDelDOne, harnessDelDone bool
+
+	if err := r.Delete(ctx, &corev1.Namespace{Name: helmNSName}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return done, err
+		}
+		nsDelDOne = true
 	}
 
 	// The harness of an operator instance is cluster-scoped, so the garbage collector does not remove
 	// it with the instance namespace.
-	if err := r.DeleteAllOf(ctx, &chrysopoeiav1.OperatorHarness{},
-		client.MatchingLabels{operatorHarnessInstanceNamespaceLabel: helmNSName}); err != nil {
-		return fmt.Errorf("unable to delete the OperatorHarness of %s: %w", helmNSName, err)
+	hnm := client.MatchingLabels{operatorHarnessInstanceNamespaceLabel: helmNSName}
+	if err := r.DeleteAllOf(ctx, &chrysopoeiav1.OperatorHarness{}, hnm); err != nil {
+		return false, fmt.Errorf("unable to delete the OperatorHarness of %s: %w", helmNSName, err)
 	}
-	return nil
+	var remainingHarnesses chrysopoeiav1.OperatorHarnessList
+	if err := r.List(ctx, &remainingHarnesses, hnm); err != nil {
+		return false, fmt.Errorf("failed to query for remaining OperatorHarness objects: %w", err)
+	}
+	harnessDelDone = len(remainingHarnesses.Items) == 0
+
+	return nsDelDOne && harnessDelDone, nil
 }
 
 func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstructured.Unstructured, helmNSName string, digest string, revision chrysopoeiav1.InstanceRevision) error {
@@ -476,20 +509,34 @@ func (r *ReleaseController) SetupDynamicControllerWithWatches(dynCtrl controller
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.InstanceRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.InstanceRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
 		return fmt.Errorf("failed to watch InstanceRevision resource: %w", err)
 	}
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &corev1.Namespace{}, handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, ns *corev1.Namespace) []reconcile.Request {
+		return mapFromClaimAnnotations(ctx, ns)
+	}))); err != nil {
+		return fmt.Errorf("failed to watch Namespace resource: %w", err)
+	}
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &helmv2.HelmRelease{}, handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, hr *helmv2.HelmRelease) []reconcile.Request {
-		a := hr.GetAnnotations()
-		instanceName := a["chrysopoeia.io/claim-name"]
-		instanceNamespace := a["chrysopoeia.io/claim-namespace"]
-		if instanceName != "" && instanceNamespace != "" {
-			return []reconcile.Request{
-				{Namespace: instanceNamespace, Name: instanceName},
-			}
-		}
-		return nil
+		return mapFromClaimAnnotations(ctx, hr)
 	}))); err != nil {
 		return fmt.Errorf("failed to watch HelmRelease resource: %w", err)
 	}
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.OperatorHarness{}, handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, oh *chrysopoeiav1.OperatorHarness) []reconcile.Request {
+		return mapFromClaimAnnotations(ctx, oh)
+	}))); err != nil {
+		return fmt.Errorf("failed to watch OperatorHarness resource: %w", err)
+	}
 
+	return nil
+}
+
+func mapFromClaimAnnotations(ctx context.Context, obj client.Object) []reconcile.Request {
+	a := obj.GetAnnotations()
+	instanceName := a["chrysopoeia.io/claim-name"]
+	instanceNamespace := a["chrysopoeia.io/claim-namespace"]
+	if instanceName != "" && instanceNamespace != "" {
+		return []reconcile.Request{
+			{Namespace: instanceNamespace, Name: instanceName},
+		}
+	}
 	return nil
 }
 
