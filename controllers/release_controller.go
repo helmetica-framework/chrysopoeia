@@ -280,6 +280,10 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	maps.Copy(namespaceLabels, commonLabels)
 	namespaceLabels["chrysopoeia.io/managed"] = ""
 	namespaceLabels["chrysopoeia.io/instance"] = ""
+	namespaceLabels["helmetica.io/monitoring"] = "instance"
+	// TODO(bastjan) configurable instance NS label injection.
+	namespaceLabels["openshift.io/user-monitoring"] = "false"
+	namespaceLabels["openshift.io/cluster-monitoring"] = "false"
 	if err := r.Apply(ctx,
 		corev1ac.Namespace(helmNSName).
 			WithAnnotations(commonAnnotations).
