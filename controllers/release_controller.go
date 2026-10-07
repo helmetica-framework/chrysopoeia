@@ -83,7 +83,9 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 				return ctrl.Result{}, err
 			}
 		}
+		return ctrl.Result{}, nil
 	}
+
 	if err := r.patchFinalizers(ctx, &claim, []string{InstanceCleanupFinalizer}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to add finalizer %q: %w", InstanceCleanupFinalizer, err)
 	}
