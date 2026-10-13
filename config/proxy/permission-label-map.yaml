@@ -23,26 +23,25 @@ spec:
         operator: "Exists"
   failurePolicy: Fail
   reinvocationPolicy: IfNeeded
+  variables:
+    - name: missing
+      expression: >
+        namespaceObject.?metadata.?labels.orValue({}).filter(k,
+          k.startsWith('requires.helmetica.io/') &&
+          !(k in object.metadata.?labels.orValue({})))
   mutations:
     - patchType: "JSONPatch"
       jsonPatch:
         expression: >
-          ('labels' in object.metadata ? [] : [
-            JSONPatch{
-              op: "add",
-              path: "/metadata/labels",
-              value: {}
-            },
+          (size(variables.missing) == 0 || 'labels' in object.metadata ? [] : [
+            JSONPatch{op: "add", path: "/metadata/labels", value: {}}
           ])
           +
-          namespaceObject.?metadata.?labels.orValue({}).map(k,
-            k.startsWith('requires.helmetica.io/') && !(k in object.metadata.?labels.orValue({})),
-            JSONPatch{
-              op: "add",
-              path: "/metadata/labels/" + jsonpatch.escapeKey(k),
-              value: ""
-            }
-          )
+          variables.missing.map(k, JSONPatch{
+            op: "add",
+            path: "/metadata/labels/" + jsonpatch.escapeKey(k),
+            value: ""
+          })
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
