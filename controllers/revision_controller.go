@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	helmutil "helm.sh/helm/v4/pkg/chart/common/util"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -35,10 +38,14 @@ import (
 	"github.com/helmetica-framework/chrysopoeia/pkg/celvalues"
 )
 
+const platformValuesAnnotation = "chrysopoeia.io/platform-values"
+
 type RevisionManager struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder events.EventRecorder
+
+	PlatformValuesNamespace string
 
 	// GVK is the GroupVersionKind of the resource that this controller manages.
 	// The controller is dynamically created for each GVK that is registered with the RevisionManagerManager.
@@ -60,9 +67,12 @@ const valuesResolvedCondition = "ValuesResolved"
 //+kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;create;update;patch;delete
 
 // NewRevisionManager returns a factory for RevisionManagers, one per managed GVK.
-func NewRevisionManager(sourceControllerHostnameOverride string) func() DynamicReconciler {
+func NewRevisionManager(sourceControllerHostnameOverride, platformValuesConfigNamespace string) func() DynamicReconciler {
 	return func() DynamicReconciler {
-		return &RevisionManager{SourceControllerHostnameOverride: sourceControllerHostnameOverride}
+		return &RevisionManager{
+			SourceControllerHostnameOverride: sourceControllerHostnameOverride,
+			PlatformValuesNamespace:          platformValuesConfigNamespace,
+		}
 	}
 }
 
@@ -227,6 +237,15 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 	if err != nil {
 		l.Error(err, "Failed to get values from instance")
 		return ctrl.Result{}, err
+	} else if values == nil {
+		values = make(map[string]any)
+	}
+	{
+		pv, err := platformValues(ctx, r.Client, r.PlatformValuesNamespace)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to get platform values: %w", err)
+		}
+		values["__platform__"] = pv
 	}
 
 	ociRepo, err := r.ensureOCIRepository(ctx, claim, ociUrl, version)
@@ -349,6 +368,31 @@ func (r *RevisionManager) SetupDynamicControllerWithWatches(dynCtrl controller.T
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.InstanceRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.InstanceRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
 		return fmt.Errorf("failed to watch InstanceRevision resource: %w", err)
 	}
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &corev1.ConfigMap{}, handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, cm *corev1.ConfigMap) []reconcile.Request {
+		l := log.FromContext(ctx).WithName("SetupDynamicControllerWithWatches.mapPlatformValueChangeToAll")
+		if _, ok := cm.Annotations[platformValuesAnnotation]; ok && cm.Namespace == r.PlatformValuesNamespace {
+			tl, err := target.ToList()
+			if err != nil {
+				l.Error(err, "Failed to create unstructured list")
+				return nil
+			}
+			if err := r.Client.List(ctx, tl); err != nil {
+				l.Error(err, "Failed querying claims to reconcile them")
+				return nil
+			}
+			requests := make([]reconcile.Request, len(tl.Items))
+			for i, c := range tl.Items {
+				requests[i] = reconcile.Request{
+					Name:      c.GetName(),
+					Namespace: c.GetNamespace(),
+				}
+			}
+			return requests
+		}
+		return nil
+	}))); err != nil {
+		return fmt.Errorf("failed to watch OCIRepository resource: %w", err)
+	}
 
 	return nil
 }
@@ -396,6 +440,76 @@ func (r *RevisionManager) preprocessorFor(ctx context.Context, ociRepo *sourcev1
 	}
 
 	return celvalues.NewFromChart(chart)
+}
+
+// platformValues loads and merges platform values to inject into revisions.
+// It lists all configmaps in the given namespace and tries to parse their [platformValuesAnnotation].
+// The value sof the annotation is expected to be a signed integer, higher values take priority and override
+// lower values. If two values are the same the configmaps are ordered alphabetically.
+// Each config map is expected to have a "values.json" config field.
+// Config maps without the data field or with parsing errors for both values and annotation are skipped
+// to not break the whole generation of revisions.
+// Values are merged the same way Helm does using the upstream [helmutil.CoalesceTables].
+func platformValues(ctx context.Context, cli client.Client, ns string) (map[string]any, error) {
+	l := log.FromContext(ctx).WithName("RevisionManager.platformValues").WithValues("annotation", platformValuesAnnotation)
+	if ns == "" {
+		return nil, fmt.Errorf("platform values namespace unset")
+	}
+	var cms corev1.ConfigMapList
+	if err := cli.List(ctx, &cms, client.InNamespace(ns)); err != nil {
+		return nil, fmt.Errorf("failed listing config maps for platform values: %w", err)
+	}
+	type parsedWithPrio struct {
+		prio   int
+		name   string
+		values map[string]any
+	}
+	parsed := make([]parsedWithPrio, 0, len(cms.Items))
+	for _, cm := range cms.Items {
+		l := l.WithValues("config_map", cm.Name)
+		prioRaw := cm.Annotations[platformValuesAnnotation]
+		if prioRaw == "" {
+			continue
+		}
+		prio, err := strconv.Atoi(prioRaw)
+		if err != nil {
+			l.Error(err, "Failed to parse platform value priority - skipping")
+			continue
+		}
+		valuesRaw := cm.Data["values.json"]
+		if valuesRaw == "" {
+			l.Error(errors.New("key not found"), "No `data[\"values.json\"]` key found")
+			continue
+		}
+		var values map[string]any
+		if err := json.Unmarshal([]byte(valuesRaw), &values); err != nil {
+			l.Error(err, "Failed to parse platform values - skipping")
+		}
+		parsed = append(parsed, parsedWithPrio{
+			prio:   prio,
+			name:   cm.Name,
+			values: values,
+		})
+	}
+	slices.SortFunc(parsed, func(a, b parsedWithPrio) int {
+		return -10*compareInt(a.prio, b.prio) + strings.Compare(a.name, b.name)
+	})
+
+	var c map[string]any
+	for _, p := range parsed {
+		c = helmutil.CoalesceTables(c, p.values)
+	}
+	return c, nil
+}
+
+func compareInt(a, b int) int {
+	if a == b {
+		return 0
+	} else if a < b {
+		return -1
+	} else {
+		return 1
+	}
 }
 
 // setClaimCondition sets cond on the claim's status, replacing an existing condition of the same

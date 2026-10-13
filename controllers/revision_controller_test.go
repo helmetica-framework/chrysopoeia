@@ -1,12 +1,15 @@
 package controllers
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/go-logr/logr/testr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -14,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func TestSetClaimCondition_OnAClaimWithoutStatus(t *testing.T) {
@@ -323,4 +327,100 @@ func TestVersionWithoutDigest(t *testing.T) {
 	assert.Equal(t, "2.1.0", versionWithoutDigest("2.1.0@sha256:abc123"))
 	assert.Equal(t, "2.1.0", versionWithoutDigest("2.1.0"), "a revision without a digest")
 	assert.Empty(t, versionWithoutDigest(""), "a claim with no revision yet")
+}
+
+func Test_platformValues(t *testing.T) {
+	const configNs = "config"
+
+	data := func(t *testing.T, values map[string]any) map[string]string {
+		t.Helper()
+
+		j, err := json.Marshal(values)
+		require.NoError(t, err)
+		return map[string]string{"values.json": string(j)}
+	}
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	for _, tc := range []struct {
+		name     string
+		expected map[string]any
+		cms      []corev1.ConfigMap
+	}{
+		{
+			name:     "simple",
+			expected: map[string]any{"distribution": "openshift", "alerting": map[string]any{"smtp": "configured"}},
+			cms: []corev1.ConfigMap{
+				{
+					Name:      "distribution",
+					Namespace: configNs,
+					Annotations: map[string]string{
+						platformValuesAnnotation: "0",
+					},
+					Data: data(t, map[string]any{"distribution": "openshift"}),
+				}, {
+					Name:      "alerting",
+					Namespace: configNs,
+					Annotations: map[string]string{
+						platformValuesAnnotation: "0",
+					},
+					Data: data(t, map[string]any{"alerting": map[string]any{"smtp": "configured"}}),
+				},
+			},
+		}, {
+			name:     "values with higher priority override lower priority ones",
+			expected: map[string]any{"distribution": "openshift"},
+			cms: []corev1.ConfigMap{
+				{
+					Name:      "distribution-default",
+					Namespace: configNs,
+					Annotations: map[string]string{
+						platformValuesAnnotation: "0",
+					},
+					Data: data(t, map[string]any{"distribution": "default"}),
+				}, {
+					Name:      "distribution",
+					Namespace: configNs,
+					Annotations: map[string]string{
+						platformValuesAnnotation: "100",
+					},
+					Data: data(t, map[string]any{"distribution": "openshift"}),
+				},
+			},
+		}, {
+			name:     "values with same priority are alphabetically ordered",
+			expected: map[string]any{"k": "a"},
+			cms: []corev1.ConfigMap{
+				{
+					Name:      "a",
+					Namespace: configNs,
+					Annotations: map[string]string{
+						platformValuesAnnotation: "0",
+					},
+					Data: data(t, map[string]any{"k": "a"}),
+				}, {
+					Name:      "b",
+					Namespace: configNs,
+					Annotations: map[string]string{
+						platformValuesAnnotation: "0",
+					},
+					Data: data(t, map[string]any{"k": "b"}),
+				},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := log.IntoContext(t.Context(), testr.New(t))
+			c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+			for _, cm := range tc.cms {
+				require.NoError(t, c.Create(ctx, &cm))
+			}
+
+			if pvs, err := platformValues(ctx, c, configNs); assert.NoError(t, err) {
+				assert.Equal(t, tc.expected, pvs)
+			}
+		})
+	}
 }

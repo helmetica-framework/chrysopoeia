@@ -237,7 +237,12 @@ func runController(cmd *cobra.Command, _ []string) error {
 					},
 				},
 				&corev1.ConfigMap{}: {
-					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
+					Namespaces: map[string]cache.Config{
+						controllerNamespace: {},
+						cache.AllNamespaces: {
+							LabelSelector: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
+						},
+					},
 				},
 				&admissionregistrationv1.MutatingWebhookConfiguration{}: {
 					Label: labels.SelectorFromSet(labels.Set{"chrysopoeia.io/managed": ""}),
@@ -307,7 +312,7 @@ func runController(cmd *cobra.Command, _ []string) error {
 
 		ControllerLifetimeCtx: lifetimeCtx,
 		ManagedReconcilers: []func() controllers.DynamicReconciler{
-			controllers.NewRevisionManager(sourceControllerHostnameOverride),
+			controllers.NewRevisionManager(sourceControllerHostnameOverride, controllerNamespace),
 			controllers.NewAutomaticApprovalManager,
 			controllers.NewReleaseController,
 		},
