@@ -9,9 +9,9 @@ resources:
 - https://github.com/fluxcd/image-reflector-controller//config/crd?ref=v1.2.5
 - https://github.com/fluxcd/image-reflector-controller//config/rbac?ref=v1.2.5
 - https://github.com/fluxcd/image-reflector-controller//config/manager?ref=v1.2.5
-- https://github.com/fluxcd/helm-controller//config/crd?ref=v1.6.5
-- https://github.com/fluxcd/helm-controller//config/rbac?ref=v1.6.5
-- https://github.com/fluxcd/helm-controller//config/manager?ref=v1.6.5
+- https://github.com/fluxcd/helm-controller//config/crd?ref=v1.7.1
+- https://github.com/fluxcd/helm-controller//config/rbac?ref=v1.7.1
+- https://github.com/fluxcd/helm-controller//config/manager?ref=v1.7.1
 - tag-serve-nginx-conf.yaml
 - tags-serve-service.yaml
 - namespace.yaml
