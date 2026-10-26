@@ -164,7 +164,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 			}
 			rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			rw.WriteHeader(statusCode)
-			_, _ = rw.Write([]byte(fmt.Sprintf("Proxy error: %s", err.Error())))
+			_, _ = fmt.Fprintf(rw, "Proxy error: %s", err.Error())
 		},
 
 		ModifyResponse: func(res *http.Response) error {
