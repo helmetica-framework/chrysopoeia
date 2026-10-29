@@ -6,9 +6,9 @@ resources:
 - https://github.com/fluxcd/source-controller//config/crd?ref=v1.9.6
 - https://github.com/fluxcd/source-controller//config/rbac?ref=v1.9.6
 - https://github.com/fluxcd/source-controller//config/manager?ref=v1.9.6
-- https://github.com/fluxcd/image-reflector-controller//config/crd?ref=v1.2.5
-- https://github.com/fluxcd/image-reflector-controller//config/rbac?ref=v1.2.5
-- https://github.com/fluxcd/image-reflector-controller//config/manager?ref=v1.2.5
+- https://github.com/fluxcd/image-reflector-controller//config/crd?ref=v1.3.0
+- https://github.com/fluxcd/image-reflector-controller//config/rbac?ref=v1.3.0
+- https://github.com/fluxcd/image-reflector-controller//config/manager?ref=v1.3.0
 - https://github.com/fluxcd/helm-controller//config/crd?ref=v1.6.5
 - https://github.com/fluxcd/helm-controller//config/rbac?ref=v1.6.5
 - https://github.com/fluxcd/helm-controller//config/manager?ref=v1.6.5
