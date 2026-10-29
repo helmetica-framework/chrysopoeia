@@ -682,7 +682,7 @@ func (lj *labelInjector) InjectLabelIntoRequest(ctx context.Context, requestInfo
 	// TODO(bastjan) We could inject labels for all of those (except maybe `application/json-patch+json`), we'd just need to return correct serializers
 	// I'm not sure if we want it though. Create and apply need it because they can both create the object.
 	// The proxy should never see an object without the label anyways so i think update does not need it?
-	if slices.ContainsFunc([]string{"application/json-patch+json", "application/merge-patch+json", "application/strategic-merge-patch+json"}, func(v string) bool { v == contentType }) {
+	if slices.ContainsFunc([]string{"application/json-patch+json", "application/merge-patch+json", "application/strategic-merge-patch+json"}, func(v string) bool { return v == contentType }) {
 		l.Info("Ignore resource for body rewrite", "reason", "content type")
 		return nil
 	}
