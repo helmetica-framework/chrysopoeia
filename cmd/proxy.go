@@ -26,6 +26,9 @@ func init() {
 	proxyCmd.Flags().Bool("secure", true, "Whether to use HTTPS for the proxy server.")
 	proxyCmd.Flags().String("addr", ":8080", "The address that the proxy will listen on.")
 
+	proxyCmd.Flags().String("inject-label", "all", "Controls whether the proxy injects the scope label on create and update requests. One of: [all, cluster-scoped, none]")
+	proxyCmd.Flags().Int64("inject-label-max-request-body-size-bytes", 5*1024*1024, "The max body size when rewriting the request body to include the label")
+
 	proxyCmd.Flags().String("cert-path", "", "The directory that contains the webhook certificate.")
 	proxyCmd.Flags().String("cert-name", "tls.crt", "The name of the webhook certificate file.")
 	proxyCmd.Flags().String("cert-key", "tls.key", "The name of the webhook key file.")
@@ -44,11 +47,23 @@ func runProxy(cmd *cobra.Command, _ []string) error {
 	proxyCertPath, pcperr := cmd.Flags().GetString("cert-path")
 	proxyCertName, pcnerr := cmd.Flags().GetString("cert-name")
 	proxyCertKey, pckerr := cmd.Flags().GetString("cert-key")
+	maxRequestBody, mrberr := cmd.Flags().GetInt64("inject-label-max-request-body-size-bytes")
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 
-	if err := multierr.Combine(secErr, addrErr, pcperr, pcnerr, pckerr); err != nil {
+	if err := multierr.Combine(secErr, addrErr, pcperr, pcnerr, pckerr, mrberr); err != nil {
 		return fmt.Errorf("failed to get flags: %w", err)
+	}
+	var liConf proxy.LabelInjection
+	switch f, _ := cmd.Flags().GetString("inject-label"); f {
+	case "all":
+		liConf = proxy.LabelInjectionAll
+	case "cluster-scoped":
+		liConf = proxy.LabelInjectionClusterScoped
+	case "none":
+		liConf = proxy.LabelInjectionNone
+	default:
+		return fmt.Errorf("unknown --inject-label configuration %q", f)
 	}
 
 	var webhookCertWatcher *certwatcher.CertWatcher
@@ -75,7 +90,7 @@ func runProxy(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	p, err := proxy.New(ctx, ctrl.GetConfigOrDie())
+	p, err := proxy.New(ctx, ctrl.GetConfigOrDie(), liConf, maxRequestBody)
 	if err != nil {
 		return fmt.Errorf("failed to create proxy: %w", err)
 	}
