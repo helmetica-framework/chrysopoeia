@@ -660,6 +660,9 @@ func newLabelInjector(ctx context.Context, upstreamRestConf *rest.Config, serial
 // It ignores any GVR without list verb. Those GVR are assumed to be "virtual" resources that do not support labels in their metadata.
 // The most prominent ones are in the authorization.k8s.io group, for example [authorizationv1.SelfSubjectAccessReview].
 func (lj *labelInjector) InjectLabelIntoRequest(ctx context.Context, requestInfo request.RequestInfo, scopeLabel string, req *http.Request) error {
+	contentType := req.Header.Get("Content-Type")
+	l := lj.logger.WithValues("content-type", contentType, "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path)
+
 	if !requestInfo.IsResourceRequest || requestInfo.Subresource != "" {
 		return nil
 	}
@@ -673,11 +676,18 @@ func (lj *labelInjector) InjectLabelIntoRequest(ctx context.Context, requestInfo
 		Resource: requestInfo.Resource,
 	}
 	if lj.ignoreGVR.Has(gvr) {
-		lj.logger.Info("Ignore resource for body rewrite", "reason", "no list method", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path)
+		l.Info("Ignore resource for body rewrite", "reason", "no list method")
+		return nil
+	}
+	// TODO(bastjan) We could inject labels for all of those (except maybe `application/json-patch+json`), we'd just need to return correct serializers
+	// I'm not sure if we want it though. Create and apply need it because they can both create the object.
+	// The proxy should never see an object without the label anyways so i think update does not need it?
+	if slices.ContainsFunc([]string{"application/json-patch+json", "application/merge-patch+json", "application/strategic-merge-patch+json"}, func(v string) bool { v == contentType }) {
+		l.Info("Ignore resource for body rewrite", "reason", "content type")
 		return nil
 	}
 
-	lj.logger.Info("Rewriting request body", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path)
+	l.Info("Rewriting request body")
 
 	rawBody, err := io.ReadAll(http.MaxBytesReader(nil, req.Body, lj.maxRequestBodySize))
 	if err != nil {
@@ -687,7 +697,7 @@ func (lj *labelInjector) InjectLabelIntoRequest(ctx context.Context, requestInfo
 	if err != nil {
 		return fmt.Errorf("failed to translate resource to GVK: %w", err)
 	}
-	s, err := lj.serializer.serializerForMediaType(req.Header.Get("Content-Type"))
+	s, err := lj.serializer.serializerForMediaType(contentType)
 	if err != nil {
 		return fmt.Errorf("failed to get serializer for content type: %w", err)
 	}
@@ -695,7 +705,7 @@ func (lj *labelInjector) InjectLabelIntoRequest(ctx context.Context, requestInfo
 	if err != nil {
 		return fmt.Errorf("failed to decode request body: %w", err)
 	}
-	lj.logger.V(5).Info("Decoded request body", "type", fmt.Sprintf("%T", o), "object", o)
+	l.V(5).Info("Decoded request body", "type", fmt.Sprintf("%T", o), "object", o)
 	co, ok := o.(client.Object)
 	if !ok {
 		return fmt.Errorf("failed to cast object %T to client.Object", co)
