@@ -505,21 +505,32 @@ func (cuf creatorWithUnstructuredFallback) New(kind schema.GroupVersionKind) (ou
 	return obj, nil
 }
 
+type unstructuredCreator struct{}
+
+// New always returns an [*unstructured.Unstructured] object
+func (unstructuredCreator) New(kind schema.GroupVersionKind) (out runtime.Object, err error) {
+	u := new(unstructured.Unstructured)
+	u.SetGroupVersionKind(kind)
+	return u, nil
+}
+
 func newContentSerializer(scheme *runtime.Scheme) *contentSerializer {
 	cuf := creatorWithUnstructuredFallback{scheme: scheme}
 	return &contentSerializer{
-		protoSerializer: protobuf.NewSerializer(cuf, scheme),
-		jsonSerializer:  json.NewSerializerWithOptions(json.DefaultMetaFactory, cuf, nil, json.SerializerOptions{}),
-		yamlSerializer:  json.NewSerializerWithOptions(json.DefaultMetaFactory, cuf, nil, json.SerializerOptions{Yaml: true}),
-		cborSerializer:  cbor.NewSerializer(cuf, nil),
+		protoSerializer:      protobuf.NewSerializer(cuf, scheme),
+		jsonSerializer:       json.NewSerializerWithOptions(json.DefaultMetaFactory, cuf, nil, json.SerializerOptions{}),
+		yamlSerializer:       json.NewSerializerWithOptions(json.DefaultMetaFactory, cuf, nil, json.SerializerOptions{Yaml: true}),
+		applyPatchSerializer: json.NewSerializerWithOptions(json.DefaultMetaFactory, unstructuredCreator{}, nil, json.SerializerOptions{Yaml: true}),
+		cborSerializer:       cbor.NewSerializer(cuf, nil),
 	}
 }
 
 type contentSerializer struct {
-	protoSerializer *protobuf.Serializer
-	jsonSerializer  *json.Serializer
-	yamlSerializer  *json.Serializer
-	cborSerializer  cbor.Serializer
+	protoSerializer      *protobuf.Serializer
+	jsonSerializer       *json.Serializer
+	yamlSerializer       *json.Serializer
+	applyPatchSerializer *json.Serializer
+	cborSerializer       cbor.Serializer
 }
 
 func (e *contentSerializer) serializerForMediaType(mediaType string) (runtime.Serializer, error) {
@@ -533,8 +544,10 @@ func (e *contentSerializer) serializerForMediaType(mediaType string) (runtime.Se
 	switch mediaType {
 	case "application/json":
 		enc = e.jsonSerializer
-	case "application/yaml", "application/apply-patch+yaml":
+	case "application/yaml":
 		enc = e.yamlSerializer
+	case "application/apply-patch+yaml":
+		enc = e.applyPatchSerializer
 	case "application/vnd.kubernetes.protobuf":
 		enc = e.protoSerializer
 	case "application/cbor":
@@ -660,11 +673,11 @@ func (lj *labelInjector) InjectLabelIntoRequest(ctx context.Context, requestInfo
 		Resource: requestInfo.Resource,
 	}
 	if lj.ignoreGVR.Has(gvr) {
-		lj.logger.Info("Ignore resource for body rewrite", "reason", "no list method", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path, "user-name")
+		lj.logger.Info("Ignore resource for body rewrite", "reason", "no list method", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path)
 		return nil
 	}
 
-	lj.logger.Info("Rewriting request body", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path, "user-name")
+	lj.logger.Info("Rewriting request body", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path)
 
 	rawBody, err := io.ReadAll(http.MaxBytesReader(nil, req.Body, lj.maxRequestBodySize))
 	if err != nil {
@@ -682,6 +695,7 @@ func (lj *labelInjector) InjectLabelIntoRequest(ctx context.Context, requestInfo
 	if err != nil {
 		return fmt.Errorf("failed to decode request body: %w", err)
 	}
+	lj.logger.V(5).Info("Decoded request body", "type", fmt.Sprintf("%T", o), "object", o)
 	co, ok := o.(client.Object)
 	if !ok {
 		return fmt.Errorf("failed to cast object %T to client.Object", co)
