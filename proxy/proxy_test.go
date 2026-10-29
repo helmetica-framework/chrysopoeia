@@ -12,6 +12,7 @@ import (
 	"github.com/go-logr/logr/testr"
 	"github.com/helmetica-framework/chrysopoeia/proxy"
 	"github.com/helmetica-framework/chrysopoeia/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -19,9 +20,12 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,7 +48,7 @@ func Test_Proxy(t *testing.T) {
 	require.NoError(t, err)
 	setupHarnessedControllerRBAC(t, adminClientset, hcSAName)
 
-	rp, err := proxy.New(log.IntoContext(t.Context(), testr.NewWithOptions(t, testr.Options{Verbosity: 100})), proxyRestConfig)
+	rp, err := proxy.New(log.IntoContext(t.Context(), testr.NewWithOptions(t, testr.Options{Verbosity: 100})), proxyRestConfig, proxy.LabelInjectionAll, 5*1024*1024)
 	require.NoError(t, err)
 
 	proxy := httptest.NewServer(rp)
@@ -63,6 +67,60 @@ func Test_Proxy(t *testing.T) {
 		_, err = hcClientset.CoreV1().Secrets("default").List(t.Context(), metav1.ListOptions{})
 		require.Error(t, err, "forbidden")
 		_, err = hcClientset.CoreV1().ConfigMaps("other-ns").List(t.Context(), metav1.ListOptions{})
+		require.Error(t, err, "forbidden")
+	})
+
+	t.Run("label injection", func(t *testing.T) {
+		cm, err := hcClientset.CoreV1().ConfigMaps("default").Create(t.Context(), &corev1.ConfigMap{Name: "newcm"}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{testScope: ""}, cm.GetLabels())
+		cm, err = hcClientset.CoreV1().ConfigMaps("default").Apply(t.Context(), corev1ac.ConfigMap("applycm", "default").WithData(map[string]string{"applyKey": "apply"}), metav1.ApplyOptions{FieldManager: "test"})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{testScope: ""}, cm.GetLabels())
+		cm.Data["updateKey"] = "update"
+		cm, err = hcClientset.CoreV1().ConfigMaps("default").Update(t.Context(), cm, metav1.UpdateOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{testScope: ""}, cm.GetLabels())
+
+		dc, err := dynamic.NewForConfig(harnessedControllerRestConfig)
+		require.NoError(t, err)
+		createRes, err := dc.Resource(schema.GroupVersionResource{
+			Group:    "helmetica.io",
+			Version:  "v1",
+			Resource: "instancerevisions",
+		}).Namespace("default").Create(t.Context(), &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "helmetica.io/v1",
+				"kind":       "InstanceRevision",
+				"metadata":   map[string]any{"name": "custom-resource"},
+			},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{testScope: ""}, createRes.GetLabels())
+		applyRes, err := dc.Resource(schema.GroupVersionResource{
+			Group:    "helmetica.io",
+			Version:  "v1",
+			Resource: "instancerevisions",
+		}).Namespace("default").Apply(t.Context(), "custom-resource", &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "helmetica.io/v1",
+				"kind":       "InstanceRevision",
+				"metadata":   map[string]any{"name": "custom-resource", "annotations": map[string]any{"apply": "test"}},
+			},
+		}, metav1.ApplyOptions{FieldManager: "test"})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{testScope: ""}, applyRes.GetLabels())
+		subject := applyRes.DeepCopy()
+		require.NoError(t, unstructured.SetNestedField(subject.Object, "test", "metadata", "annotations", "updatetest"))
+		updateRes, err := dc.Resource(schema.GroupVersionResource{
+			Group:    "helmetica.io",
+			Version:  "v1",
+			Resource: "instancerevisions",
+		}).Namespace("default").Update(t.Context(), subject, metav1.UpdateOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{testScope: ""}, updateRes.GetLabels())
+
+		_, err = hcClientset.CoreV1().ConfigMaps("other-ns").Create(t.Context(), &corev1.ConfigMap{Name: "newcm"}, metav1.CreateOptions{})
 		require.Error(t, err, "forbidden")
 	})
 
@@ -242,7 +300,11 @@ func setupHarnessedControllerRBAC(t *testing.T, adminClientset *kubernetes.Clien
 			{
 				APIGroups: []string{""},
 				Resources: []string{"configmaps"},
-				Verbs:     []string{"get", "list", "watch"},
+				Verbs:     []string{"*"},
+			}, {
+				APIGroups: []string{"helmetica.io"},
+				Resources: []string{"instancerevisions"},
+				Verbs:     []string{"*"},
 			},
 		},
 	}, metav1.CreateOptions{})

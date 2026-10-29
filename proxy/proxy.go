@@ -20,9 +20,11 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/runtime/serializer/cbor"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -31,12 +33,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/transport"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -50,17 +57,25 @@ const internalErrorStatusCodeHeader = "X-Chrysopoeia-Proxy-Error-Status-Code"
 // The harness grants it to the operator, with the scope label as the resource name.
 const ScopedListVerb = "scopedlist"
 
+type LabelInjection int
+
+const (
+	LabelInjectionNone LabelInjection = iota
+	LabelInjectionClusterScoped
+	LabelInjectionAll
+)
+
 // New creates a new HTTP handler that proxies requests to the upstream Kubernetes API server,
 // rewriting requests and responses as necessary to enforce access control based on the scope label.
 // Shutting down the context will stop the internal service account cache.
-func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, error) {
+func New(ctx context.Context, upstreamRestConf *rest.Config, ljConfig LabelInjection, labelInjectorMaxRequestBodySize int64) (http.Handler, error) {
 	l := log.FromContext(ctx).WithName("proxy")
 
 	scheme, decoder, err := newDecoder()
 	if err != nil {
 		return nil, err
 	}
-	encoder := newEncoder(scheme)
+	serializer := newContentSerializer(scheme)
 
 	if !impersonationEmpty(upstreamRestConf) {
 		return nil, fmt.Errorf("impersonation is not supported for the upstream config")
@@ -73,6 +88,17 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 
 	authenticationClient := kubeClient.AuthenticationV1()
 	authorizationClient := kubeClient.AuthorizationV1()
+	var lj injectIntoRequester
+	switch ljConfig {
+	case LabelInjectionNone:
+		lj = noopLabelInjector{}
+	case LabelInjectionClusterScoped, LabelInjectionAll:
+		l, err := newLabelInjector(ctx, upstreamRestConf, serializer, labelInjectorMaxRequestBodySize, ljConfig == LabelInjectionClusterScoped)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create label injector: %w", err)
+		}
+		lj = l
+	}
 
 	scopeExtractor := newScopeExtractor(ctx, kubeClient)
 
@@ -104,10 +130,6 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 				return fmt.Errorf("failed to decode request info: %w", err)
 			}
 
-			if !requestNeedsRewrite(requestInfo) {
-				return nil
-			}
-
 			userInfo, err := extractUserInfoFromAuthHeader(r.In.Context(), authenticationClient, r.In.Header.Get("Authorization"))
 			if err != nil {
 				return fmt.Errorf("failed to extract user info from bearer token: %w", err)
@@ -116,6 +138,14 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 			scopeLabel, err := scopeExtractor.getScopeLabel(r.In.Header, userInfo.Username)
 			if err != nil {
 				return fmt.Errorf("failed to get scope label: %w", err)
+			}
+
+			if err := lj.InjectLabelIntoRequest(r.In.Context(), requestInfo, scopeLabel, r.Out); err != nil {
+				return fmt.Errorf("failed to inject label: %w", err)
+			}
+
+			if !requestNeedsRewrite(requestInfo) {
+				return nil
 			}
 
 			l.Info("Rewriting request", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path, "user-name", userInfo.Username, "user-uid", userInfo.UID)
@@ -229,7 +259,7 @@ func New(ctx context.Context, upstreamRestConf *rest.Config) (http.Handler, erro
 				return fmt.Errorf("unexpected response type for SelfSubjectAccessReview: %T", obj)
 			}
 
-			if err := encoder.encodeIntoBody(res, decodedObj); err != nil {
+			if err := serializer.encodeIntoResponse(res, decodedObj); err != nil {
 				return fmt.Errorf("failed to encode modified response body: %w", err)
 			}
 
@@ -274,7 +304,7 @@ func decodeRequestInfo(req *http.Request) (request.RequestInfo, error) {
 func newDecoder() (*runtime.Scheme, runtime.Decoder, error) {
 	scheme := runtime.NewScheme()
 
-	if err := authorizationv1.AddToScheme(scheme); err != nil {
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		return nil, nil, err
 	}
 
@@ -453,34 +483,57 @@ func (e *errorWithStatusCode) Error() string {
 	return fmt.Sprintf("%s (status code: %d)", e.error.Error(), e.statusCode)
 }
 
-func newEncoder(scheme *runtime.Scheme) *encoder {
-	return &encoder{
-		protoSerializer: protobuf.NewSerializer(scheme, scheme),
-		jsonSerializer:  json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{}),
-		yamlSerializer:  json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{Yaml: true}),
-		cborSerializer:  cbor.NewSerializer(scheme, scheme),
+// creatorWithUnstructuredFallback allows falling back to [unstructured.Unstructured] if a kind is not registered with the scheme.
+// We generally don't care about having a concrete type in the proxy (except for [authorizationv1.SelfSubjectAccessReview]) but
+// protobuf serialization requires the concrete object so we can't use unstructured everywhere.
+// Most clients use protobuf when requesting manifests from the groups built into the api server.
+// The proxies client version should be equal or newer than the api-server version.
+type creatorWithUnstructuredFallback struct {
+	scheme *runtime.Scheme
+}
+
+// New tries [runtime.Scheme.New] and falls back to [unstructured.Unstructured] if the kind is not registered.
+func (cuf creatorWithUnstructuredFallback) New(kind schema.GroupVersionKind) (out runtime.Object, err error) {
+	obj, err := cuf.scheme.New(kind)
+	if err != nil && runtime.IsNotRegisteredError(err) {
+		u := new(unstructured.Unstructured)
+		u.SetGroupVersionKind(kind)
+		return u, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
+func newContentSerializer(scheme *runtime.Scheme) *contentSerializer {
+	cuf := creatorWithUnstructuredFallback{scheme: scheme}
+	return &contentSerializer{
+		protoSerializer: protobuf.NewSerializer(cuf, scheme),
+		jsonSerializer:  json.NewSerializerWithOptions(json.DefaultMetaFactory, cuf, nil, json.SerializerOptions{}),
+		yamlSerializer:  json.NewSerializerWithOptions(json.DefaultMetaFactory, cuf, nil, json.SerializerOptions{Yaml: true}),
+		cborSerializer:  cbor.NewSerializer(cuf, nil),
 	}
 }
 
-type encoder struct {
+type contentSerializer struct {
 	protoSerializer *protobuf.Serializer
 	jsonSerializer  *json.Serializer
 	yamlSerializer  *json.Serializer
 	cborSerializer  cbor.Serializer
 }
 
-func (e *encoder) encoderForMediaType(mediaType string) (runtime.Encoder, error) {
+func (e *contentSerializer) serializerForMediaType(mediaType string) (runtime.Serializer, error) {
 	mediaType, _, err := mime.ParseMediaType(mediaType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse media type: %w", err)
 	}
 
 	// https://kubernetes.io/docs/reference/using-api/api-concepts/#alternate-representations-of-resources
-	var enc runtime.Encoder
+	var enc runtime.Serializer
 	switch mediaType {
 	case "application/json":
 		enc = e.jsonSerializer
-	case "application/yaml":
+	case "application/yaml", "application/apply-patch+yaml":
 		enc = e.yamlSerializer
 	case "application/vnd.kubernetes.protobuf":
 		enc = e.protoSerializer
@@ -493,9 +546,9 @@ func (e *encoder) encoderForMediaType(mediaType string) (runtime.Encoder, error)
 	return enc, nil
 }
 
-func (e *encoder) encodeIntoBody(res *http.Response, obj runtime.Object) error {
+func (e *contentSerializer) encodeIntoResponse(res *http.Response, obj runtime.Object) error {
 	contentType := res.Header.Get("Content-Type")
-	enc, err := e.encoderForMediaType(contentType)
+	enc, err := e.serializerForMediaType(contentType)
 	if err != nil {
 		return fmt.Errorf("failed to get encoder for Content-Type %q: %w", contentType, err)
 	}
@@ -508,6 +561,142 @@ func (e *encoder) encodeIntoBody(res *http.Response, obj runtime.Object) error {
 	res.Header.Del("Content-Length")
 	res.Body = io.NopCloser(buf)
 	res.ContentLength = int64(buf.Len())
+
+	return nil
+}
+
+func (e *contentSerializer) encodeIntoRequest(req *http.Request, obj runtime.Object) error {
+	contentType := req.Header.Get("Content-Type")
+	enc, err := e.serializerForMediaType(contentType)
+	if err != nil {
+		return fmt.Errorf("failed to get encoder for Content-Type %q: %w", contentType, err)
+	}
+
+	buf := &bytes.Buffer{}
+	if err := enc.Encode(obj, buf); err != nil {
+		return fmt.Errorf("failed to encode %s: %w", contentType, err)
+	}
+
+	req.Header.Del("Content-Length")
+	req.Body = io.NopCloser(buf)
+	req.ContentLength = int64(buf.Len())
+
+	return nil
+}
+
+func groupVersionFromString(s string) schema.GroupVersion {
+	parts := strings.Split(s, "/")
+	if len(parts) == 1 {
+		return schema.GroupVersion{Version: parts[0]}
+	}
+	return schema.GroupVersion{Group: parts[0], Version: parts[1]}
+}
+
+type injectIntoRequester interface {
+	InjectLabelIntoRequest(context.Context, request.RequestInfo, string, *http.Request) error
+}
+
+type noopLabelInjector struct{}
+
+func (noopLabelInjector) InjectLabelIntoRequest(context.Context, request.RequestInfo, string, *http.Request) error {
+	return nil
+}
+
+type labelInjector struct {
+	serializer         *contentSerializer
+	mapper             *restmapper.DeferredDiscoveryRESTMapper
+	ignoreGVR          sets.Set[schema.GroupVersionResource]
+	clusterScopedOnly  bool
+	maxRequestBodySize int64
+	logger             logr.Logger
+}
+
+func newLabelInjector(ctx context.Context, upstreamRestConf *rest.Config, serializer *contentSerializer, maxRequestBodySize int64, clusterScopedOnly bool) (*labelInjector, error) {
+	l := log.FromContext(ctx).WithName("labelInjector")
+	discoClient, err := discovery.NewDiscoveryClientForConfig(upstreamRestConf)
+	if err != nil {
+		return nil, err
+	}
+	mapper := restmapper.NewDeferredDiscoveryRESTMapperWithContext(memory.NewMemCacheClientWithContext(discoClient))
+	spr, err := discoClient.ServerPreferredResourcesWithContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load server resource: %w", err)
+	}
+	gvrWithoutList := sets.New[schema.GroupVersionResource]()
+	for _, rl := range spr {
+		for _, r := range rl.APIResources {
+			if slices.Contains(r.Verbs, "list") {
+				continue
+			}
+			gvrWithoutList.Insert(groupVersionFromString(rl.GroupVersion).WithResource(r.Name))
+		}
+	}
+	l.Info("Ignored GVRs when injecting labels", "stage", "init", "reason", "no list method", "gvr", gvrWithoutList.UnsortedList())
+
+	return &labelInjector{
+		serializer:         serializer,
+		mapper:             mapper,
+		ignoreGVR:          gvrWithoutList,
+		clusterScopedOnly:  clusterScopedOnly,
+		logger:             l,
+		maxRequestBodySize: maxRequestBodySize,
+	}, nil
+}
+
+// InjectLabelIntoRequest injects the given scope label into the request.
+// It ignores any GVR without list verb. Those GVR are assumed to be "virtual" resources that do not support labels in their metadata.
+// The most prominent ones are in the authorization.k8s.io group, for example [authorizationv1.SelfSubjectAccessReview].
+func (lj *labelInjector) InjectLabelIntoRequest(ctx context.Context, requestInfo request.RequestInfo, scopeLabel string, req *http.Request) error {
+	if !requestInfo.IsResourceRequest || requestInfo.Subresource != "" {
+		return nil
+	}
+	if !slices.ContainsFunc([]string{"create", "update", "patch"}, func(v string) bool { return strings.EqualFold(v, requestInfo.Verb) }) {
+		return nil
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    requestInfo.APIGroup,
+		Version:  requestInfo.APIVersion,
+		Resource: requestInfo.Resource,
+	}
+	if lj.ignoreGVR.Has(gvr) {
+		lj.logger.Info("Ignore resource for body rewrite", "reason", "no list method", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path, "user-name")
+		return nil
+	}
+
+	lj.logger.Info("Rewriting request body", "scope", scopeLabel, "verb", requestInfo.Verb, "path", requestInfo.Path, "user-name")
+
+	rawBody, err := io.ReadAll(http.MaxBytesReader(nil, req.Body, lj.maxRequestBodySize))
+	if err != nil {
+		return fmt.Errorf("failed reading body for rewriting: %w", err)
+	}
+	gvk, err := lj.mapper.KindForWithContext(ctx, gvr)
+	if err != nil {
+		return fmt.Errorf("failed to translate resource to GVK: %w", err)
+	}
+	s, err := lj.serializer.serializerForMediaType(req.Header.Get("Content-Type"))
+	if err != nil {
+		return fmt.Errorf("failed to get serializer for content type: %w", err)
+	}
+	o, _, err := s.Decode(rawBody, &gvk, nil)
+	if err != nil {
+		return fmt.Errorf("failed to decode request body: %w", err)
+	}
+	co, ok := o.(client.Object)
+	if !ok {
+		return fmt.Errorf("failed to cast object %T to client.Object", co)
+	}
+	labels := co.GetLabels()
+	if _, ok := labels[scopeLabel]; !ok {
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[scopeLabel] = ""
+	}
+	co.SetLabels(labels)
+	if err := lj.serializer.encodeIntoRequest(req, co); err != nil {
+		return fmt.Errorf("failed to encode rewritten body: %w", err)
+	}
 
 	return nil
 }
