@@ -197,9 +197,7 @@ spec:
                   type: object
                 type: array
             required:
-            - clusterRules
             - crds
-            - rules
             type: object
           status:
             description: DependencyGroupStatus defines the observed state of DependencyGroup.
