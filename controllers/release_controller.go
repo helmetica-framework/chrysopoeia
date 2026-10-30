@@ -253,7 +253,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 
 	manages := extractManages(instance)
 	for _, ref := range manages {
-		commonLabels[ProvidesLabelPrefix+ref.ScopeName()] = ""
+		commonLabels[ManagesLabelPrefix+ref.ScopeName()] = ""
 	}
 
 	if err := r.ensureOperatorHarness(ctx, instance, helmNSName, commonAnnotations, commonLabels, ownerOpt); err != nil {
