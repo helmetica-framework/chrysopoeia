@@ -5,6 +5,7 @@
 package v1
 
 import (
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -225,6 +226,20 @@ func (in *DependencyGroupSpec) DeepCopyInto(out *DependencyGroupSpec) {
 		in, out := &in.CRDs, &out.CRDs
 		*out = make([]DependencyGroupCRD, len(*in))
 		copy(*out, *in)
+	}
+	if in.Rules != nil {
+		in, out := &in.Rules, &out.Rules
+		*out = make([]rbacv1.PolicyRule, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.ClusterRules != nil {
+		in, out := &in.ClusterRules, &out.ClusterRules
+		*out = make([]rbacv1.PolicyRule, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	if in.HarnessRef != nil {
 		in, out := &in.HarnessRef, &out.HarnessRef

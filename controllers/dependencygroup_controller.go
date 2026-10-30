@@ -22,6 +22,7 @@ import (
 
 // DependencyGroupManager validates the claims DependencyGroups make on their CRDs. A CRD may belong
 // to a single group only, so that two operators cannot end up managing the same resources.
+// It does not do any RBAC or anything related to harnesses.
 type DependencyGroupManager struct {
 	client.Client
 	Scheme   *runtime.Scheme
