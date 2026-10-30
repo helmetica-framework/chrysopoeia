@@ -20,6 +20,9 @@ type CustomResourceDefinitionSourceSpecApplyConfiguration struct {
 	CRDNames *apiextensionsv1.CustomResourceDefinitionNames `json:"crdNames,omitempty"`
 	// VersionDiscovery defines how to discover the version of the source.
 	VersionDiscovery *VersionDiscoveryApplyConfiguration `json:"versionDiscovery,omitempty"`
+	// InstancePermissions defines what permissions are required to deploy the Helm chart.
+	// The default permissions is equal to binding the "admin" aggregate role in the namespace.
+	InstancePermissions *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration `json:"instancePermissions,omitempty"`
 	// Provides lists the DependencyGroups whose CRDs the chart of this source ships. It grants the
 	// chart write access to those CRDs and lets Helm install them; it says nothing about who operates
 	// them, that is Manages. Exactly one source may provide a group, otherwise two charts install the
@@ -63,6 +66,14 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithCRDNames(valu
 // If called multiple times, the VersionDiscovery field is set to the value of the last call.
 func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithVersionDiscovery(value *VersionDiscoveryApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
 	b.VersionDiscovery = value
+	return b
+}
+
+// WithInstancePermissions sets the InstancePermissions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the InstancePermissions field is set to the value of the last call.
+func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithInstancePermissions(value *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+	b.InstancePermissions = value
 	return b
 }
 

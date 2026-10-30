@@ -1,6 +1,7 @@
 package v1
 
 import (
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -14,6 +15,11 @@ type DependencyGroupSpec struct {
 	// +listMapKey=name
 	// +required
 	CRDs []DependencyGroupCRD `json:"crds"`
+
+	// Rules grants any service account in the 'manages' namespace the given permissions in the 'requires' namespaces.
+	Rules []rbacv1.PolicyRule `json:"rules,omitempty"`
+	// ClusterRules grants any service account in the 'manages' namespace the given permissions on the cluster level.
+	ClusterRules []rbacv1.PolicyRule `json:"clusterRules,omitempty"`
 
 	// HarnessRef references the harness of the operator managing the CRDs of this group.
 	// +optional

@@ -60,6 +60,12 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupSpec
   map:
     fields:
+    - name: clusterRules
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.api.rbac.v1.PolicyRule
+          elementRelationship: atomic
     - name: crds
       type:
         list:
@@ -71,6 +77,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: harnessRef
       type:
         namedType: com.github.helmetica-framework.chrysopoeia.api.v1.HarnessReference
+    - name: rules
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.api.rbac.v1.PolicyRule
+          elementRelationship: atomic
 - name: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupState
   scalar: string
 - name: com.github.helmetica-framework.chrysopoeia.api.v1.DependencyGroupStatus
@@ -154,6 +166,39 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
+          elementRelationship: atomic
+- name: io.k8s.api.rbac.v1.PolicyRule
+  map:
+    fields:
+    - name: apiGroups
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: nonResourceURLs
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: resourceNames
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: resources
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: verbs
+      type:
+        list:
+          elementType:
+            scalar: string
           elementRelationship: atomic
 - name: io.k8s.apimachinery.pkg.apis.meta.v1.Condition
   map:
