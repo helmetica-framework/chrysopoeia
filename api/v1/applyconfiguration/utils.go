@@ -18,6 +18,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	// Group=helmetica.io, Version=v1
 	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSource"):
 		return &apiv1.CustomResourceDefinitionSourceApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSourceInstancePermissions"):
+		return &apiv1.CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSourceSpec"):
 		return &apiv1.CustomResourceDefinitionSourceSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSourceStatus"):
