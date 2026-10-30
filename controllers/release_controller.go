@@ -13,6 +13,7 @@ import (
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -353,6 +354,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 
+	// Ensure CRDs required through a dependency group can be managed
 	rbacRequires := make([]*rbacv1ac.PolicyRuleApplyConfiguration, 0, len(requiredCRDs))
 	for _, crd := range requiredCRDs {
 		resource, group, found := strings.Cut(crd, ".")
@@ -391,6 +393,63 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	)
 	if err := r.Apply(ctx, requiresRoleBinding, ownerOpt); err != nil {
 		return err
+	}
+
+	claimSource, err := r.findSourceFromClaim(ctx, &instance)
+	if err != nil {
+		return fmt.Errorf("failed to load source of claim: %w", err)
+	}
+	const addlPermRoleName = "chrysopoeia:additional-permissions"
+	addlPermRole := rbacv1ac.
+		Role(addlPermRoleName, helmNSName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels)
+	for _, rule := range claimSource.Spec.InstancePermissions.AdditionalRules {
+		addlPermRole = addlPermRole.WithRules(applyConfigFromPolicyRule(rule))
+	}
+	addlPermRoleBinding := rbacv1ac.RoleBinding(addlPermRoleName, helmNSName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
+		WithRoleRef(
+			rbacv1ac.RoleRef().
+				WithAPIGroup("rbac.authorization.k8s.io").
+				WithKind("Role").
+				WithName(addlPermRoleName),
+		).WithSubjects(
+		rbacv1ac.Subject().
+			WithKind("ServiceAccount").
+			WithName(saName).
+			WithNamespace(helmNSName),
+	)
+	addlPermCRName := fmt.Sprintf("chrysopoeia:additional-permissions:%s", helmNSName)
+	addlPermClusterRole := rbacv1ac.
+		ClusterRole(addlPermCRName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels)
+	for _, rule := range claimSource.Spec.InstancePermissions.AdditionalClusterRules {
+		addlPermClusterRole = addlPermClusterRole.WithRules(applyConfigFromPolicyRule(rule))
+	}
+	addlPermClusterRoleBinding := rbacv1ac.ClusterRoleBinding(addlPermCRName).
+		WithAnnotations(commonAnnotations).
+		WithLabels(commonLabels).
+		WithRoleRef(
+			rbacv1ac.RoleRef().
+				WithAPIGroup("rbac.authorization.k8s.io").
+				WithKind("ClusterRole").
+				WithName(addlPermCRName),
+		).WithSubjects(
+		rbacv1ac.Subject().
+			WithKind("ServiceAccount").
+			WithName(saName).
+			WithNamespace(helmNSName),
+	)
+	if err := errors.Join(
+		r.Apply(ctx, addlPermRole, ownerOpt),
+		r.Apply(ctx, addlPermRoleBinding, ownerOpt),
+		r.Apply(ctx, addlPermClusterRole, ownerOpt),
+		r.Apply(ctx, addlPermClusterRoleBinding, ownerOpt),
+	); err != nil {
+		return fmt.Errorf("failed to setup additional permissions: %w", err)
 	}
 
 	artifact := &sourcev1.OCIRepository{}
@@ -470,6 +529,28 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 	return nil
+}
+
+func (r *ReleaseController) findSourceFromClaim(ctx context.Context, u client.Object) (chrysopoeiav1.CustomResourceDefinitionSource, error) {
+	gvk := u.GetObjectKind().GroupVersionKind()
+	gvr, err := r.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		return chrysopoeiav1.CustomResourceDefinitionSource{}, fmt.Errorf("unable to map GVK to GVR: %w", err)
+	}
+	var crd apiextv1.CustomResourceDefinition
+	if err := r.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("%s.%s", gvr.Resource.Resource, gvr.Resource.Group)}, &crd); err != nil {
+		return chrysopoeiav1.CustomResourceDefinitionSource{}, fmt.Errorf("unable to load CRD: %w", err)
+	}
+	crdsName := crd.Annotations["chrysopoeia.io/source-ref-name"]
+	crdsNamespace := crd.Annotations["chrysopoeia.io/source-ref-namespace"]
+	if crdsName == "" || crdsNamespace == "" {
+		return chrysopoeiav1.CustomResourceDefinitionSource{}, fmt.Errorf("unable to retrieve CustomResourceDefinitionSource from CustomResourceDefinition; name or namespace missing ns=%q name%q", crdsNamespace, crdsName)
+	}
+	var crds chrysopoeiav1.CustomResourceDefinitionSource
+	if err := r.Get(ctx, client.ObjectKey{Namespace: crdsNamespace, Name: crdsName}, &crds); err != nil {
+		return chrysopoeiav1.CustomResourceDefinitionSource{}, fmt.Errorf("unable to load CustomResourceDefinitionSource: %w", err)
+	}
+	return crds, nil
 }
 
 // appuioNamespaceLabels returns a map of labels that are required on the APPUiO platform for its multi-tenant feautures.
