@@ -51,7 +51,7 @@ func (r *DependencyNetworkPolicyManager) Reconcile(ctx context.Context, req reco
 		igrs[i] = networkingv1ac.NetworkPolicyIngressRule().
 			WithFrom(
 				networkingv1ac.NetworkPolicyPeer().
-					WithPodSelector(
+					WithNamespaceSelector(
 						metav1ac.LabelSelector().
 							WithMatchExpressions(
 								metav1ac.LabelSelectorRequirement().
