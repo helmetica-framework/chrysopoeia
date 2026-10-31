@@ -62,7 +62,7 @@ func (r *DependencyNetworkPolicyManager) Reconcile(ctx context.Context, req reco
 			)
 	}
 
-	np := networkingv1ac.NetworkPolicy("chrysopoeia:depedency:manages", ns.Name).
+	np := networkingv1ac.NetworkPolicy("chrysopoeia-depedency-manages", ns.Name).
 		WithSpec(
 			networkingv1ac.NetworkPolicySpec().
 				WithIngress(igrs...).
