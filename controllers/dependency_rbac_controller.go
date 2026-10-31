@@ -131,7 +131,7 @@ func (r *DependencyRBACManager) ensureRequiresRules(ctx context.Context, provide
 				WithRoleRef(
 					rbacv1ac.RoleRef().
 						WithAPIGroup("rbac.authorization.k8s.io").
-						WithKind("ClusterRole").
+						WithKind("Role").
 						WithName(roleName),
 				).
 				WithSubjects(subjects...)
