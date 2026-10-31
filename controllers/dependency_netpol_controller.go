@@ -14,7 +14,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -81,7 +80,6 @@ func (r *DependencyNetworkPolicyManager) SetupWithManager(name string, mgr ctrl.
 
 	return builder.ControllerManagedBy(mgr).
 		For(&corev1.Namespace{}, builder.WithPredicates(labelSelectorPredicate(sel))).
-		Watches(&networkingv1.Ingress{}, handler.EnqueueRequestsFromMapFunc(mapToManagedNamespace(r.Client))).
 		Named(name).
 		Complete(r)
 }
