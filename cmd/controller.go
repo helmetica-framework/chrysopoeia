@@ -304,6 +304,14 @@ func runController(cmd *cobra.Command, _ []string) error {
 	if err := drm.SetupWithManager("dependency-rbac-manager", mgr); err != nil {
 		return fmt.Errorf("unable to create DependencyRBACManager controller: %w", err)
 	}
+	dnpm := &controllers.DependencyNetworkPolicyManager{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder("dependency-netpol-manager"),
+	}
+	if err := dnpm.SetupWithManager("dependency-netpol-manager", mgr); err != nil {
+		return fmt.Errorf("unable to create DependencyNetworkPolicyManager controller: %w", err)
+	}
 
 	imm := &controllers.DynamicReconcilerManager{
 		Client:   mgr.GetClient(),

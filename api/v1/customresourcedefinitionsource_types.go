@@ -1,6 +1,7 @@
 package v1
 
 import (
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -20,6 +21,10 @@ type CustomResourceDefinitionSourceSpec struct {
 	// VersionDiscovery defines how to discover the version of the source.
 	// +optional
 	VersionDiscovery VersionDiscovery `json:"versionDiscovery,omitempty"`
+
+	// InstancePermissions defines what permissions are required to deploy the Helm chart.
+	// The default permissions is equal to binding the "admin" aggregate role in the namespace.
+	InstancePermissions CustomResourceDefinitionSourceInstancePermissions `json:"instancePermissions,omitempty"`
 
 	// Provides lists the DependencyGroups whose CRDs the chart of this source ships. It grants the
 	// chart write access to those CRDs and lets Helm install them; it says nothing about who operates
@@ -42,6 +47,13 @@ type CustomResourceDefinitionSourceSpec struct {
 	// Requires lists the DependencyGroups that instances of this source consume.
 	// +optional
 	Requires []DependencyReference `json:"requires,omitempty"`
+}
+
+type CustomResourceDefinitionSourceInstancePermissions struct {
+	// AdditionalRules holds additional rules that should be granted on top of the default permissions.
+	AdditionalRules []rbacv1.PolicyRule `json:"additionalRules,omitempty"`
+	// AdditionalClusterRules holds additional cluster scoped rules that should be granted on top of the default permissions.
+	AdditionalClusterRules []rbacv1.PolicyRule `json:"additionalClusterRules,omitempty"`
 }
 
 // DependencyReference references a dependency. Exactly one referent has to be set.

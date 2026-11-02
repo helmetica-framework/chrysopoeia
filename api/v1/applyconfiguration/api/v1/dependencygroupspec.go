@@ -2,6 +2,10 @@
 
 package v1
 
+import (
+	rbacv1 "k8s.io/api/rbac/v1"
+)
+
 // DependencyGroupSpecApplyConfiguration represents a declarative configuration of the DependencyGroupSpec type for use
 // with apply.
 //
@@ -11,6 +15,10 @@ type DependencyGroupSpecApplyConfiguration struct {
 	// A CRD must not belong to more than one group, groups claiming an already claimed CRD are
 	// rejected. The CRDs do not have to exist yet.
 	CRDs []DependencyGroupCRDApplyConfiguration `json:"crds,omitempty"`
+	// Rules grants any service account in the 'manages' namespace the given permissions in the 'requires' namespaces.
+	Rules []rbacv1.PolicyRule `json:"rules,omitempty"`
+	// ClusterRules grants any service account in the 'manages' namespace the given permissions on the cluster level.
+	ClusterRules []rbacv1.PolicyRule `json:"clusterRules,omitempty"`
 	// HarnessRef references the harness of the operator managing the CRDs of this group.
 	HarnessRef *HarnessReferenceApplyConfiguration `json:"harnessRef,omitempty"`
 }
@@ -30,6 +38,26 @@ func (b *DependencyGroupSpecApplyConfiguration) WithCRDs(values ...*DependencyGr
 			panic("nil value passed to WithCRDs")
 		}
 		b.CRDs = append(b.CRDs, *values[i])
+	}
+	return b
+}
+
+// WithRules adds the given value to the Rules field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Rules field.
+func (b *DependencyGroupSpecApplyConfiguration) WithRules(values ...rbacv1.PolicyRule) *DependencyGroupSpecApplyConfiguration {
+	for i := range values {
+		b.Rules = append(b.Rules, values[i])
+	}
+	return b
+}
+
+// WithClusterRules adds the given value to the ClusterRules field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the ClusterRules field.
+func (b *DependencyGroupSpecApplyConfiguration) WithClusterRules(values ...rbacv1.PolicyRule) *DependencyGroupSpecApplyConfiguration {
+	for i := range values {
+		b.ClusterRules = append(b.ClusterRules, values[i])
 	}
 	return b
 }
