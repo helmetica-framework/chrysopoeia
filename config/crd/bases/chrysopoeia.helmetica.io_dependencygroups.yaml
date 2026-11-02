@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: dependencygroups.helmetica.io
+  name: dependencygroups.chrysopoeia.helmetica.io
 spec:
-  group: helmetica.io
+  group: chrysopoeia.helmetica.io
   names:
     kind: DependencyGroup
     listKind: DependencyGroupList
@@ -264,7 +264,7 @@ spec:
               state:
                 description: |-
                   State is Accepted if the group holds the claim on all of its CRDs, and Rejected otherwise.
-                  Only accepted groups may be referenced by a CustomResourceDefinitionSource.
+                  Only accepted groups may be referenced by a ClaimDefinition.
                 enum:
                 - Accepted
                 - Rejected

@@ -5,8 +5,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// InstanceRevisionSpec defines the desired state of InstanceRevision.
-type InstanceRevisionSpec struct {
+// ClaimRevisionSpec defines the desired state of ClaimRevision.
+type ClaimRevisionSpec struct {
 	// Version is the version of the Helm chart.
 	// +kubebuilder:validation:MinLength=1
 	// +required
@@ -29,8 +29,8 @@ type InstanceRevisionSpec struct {
 	ApprovedAt *metav1.Time `json:"approvedAt,omitempty"`
 }
 
-// InstanceRevisionStatus defines the observed state of InstanceRevision
-type InstanceRevisionStatus struct {
+// ClaimRevisionStatus defines the observed state of ClaimRevision
+type ClaimRevisionStatus struct {
 }
 
 // +genclient
@@ -41,24 +41,24 @@ type InstanceRevisionStatus struct {
 //+kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.spec.version`
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description=""
 
-// InstanceRevision is the Schema for the bundlesources API.
-type InstanceRevision struct {
+// ClaimRevision is the Schema for the bundlesources API.
+type ClaimRevision struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   InstanceRevisionSpec   `json:"spec,omitempty"`
-	Status InstanceRevisionStatus `json:"status,omitempty"`
+	Spec   ClaimRevisionSpec   `json:"spec,omitempty"`
+	Status ClaimRevisionStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// InstanceRevisionList contains a list of InstanceRevision.
-type InstanceRevisionList struct {
+// ClaimRevisionList contains a list of ClaimRevision.
+type ClaimRevisionList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []InstanceRevision `json:"items"`
+	Items           []ClaimRevision `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&InstanceRevision{}, &InstanceRevisionList{})
+	SchemeBuilder.Register(&ClaimRevision{}, &ClaimRevisionList{})
 }

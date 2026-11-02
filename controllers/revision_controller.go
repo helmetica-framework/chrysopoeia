@@ -61,8 +61,8 @@ type RevisionManager struct {
 // whether the release is ready, which is the release controller's business.
 const valuesResolvedCondition = "ValuesResolved"
 
-//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=claimrevisions,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=claimrevisions/status,verbs=get;update;patch
 
 //+kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=ocirepositories,verbs=get;list;watch;create;update;patch;delete
 
@@ -128,7 +128,7 @@ func (r *RevisionManager) newestAllowedVersion(ctx context.Context, gvk schema.G
 }
 
 // newestVersion is the newest version a claim kind allows: the first entry of the spec.version enum
-// the CustomResourceDefinitionSource controller writes onto the generated CRD, which discovery sorts
+// the ClaimDefinition controller writes onto the generated CRD, which discovery sorts
 // newest first.
 func newestVersion(crd apiextensionsv1.CustomResourceDefinition, gvk schema.GroupVersionKind) (string, error) {
 	v := slices.IndexFunc(crd.Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) bool {
@@ -171,7 +171,7 @@ func (r *RevisionManager) currentVersion(ctx context.Context, claim unstructured
 		return "", nil
 	}
 
-	var rev chrysopoeiav1.InstanceRevision
+	var rev chrysopoeiav1.ClaimRevision
 	if err := r.Get(ctx, client.ObjectKey{Namespace: claim.GetNamespace(), Name: name}, &rev); err != nil {
 		if apierrors.IsNotFound(err) {
 			return "", nil
@@ -302,7 +302,7 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 
 	revName := strings.Join([]string{claim.GetName(), fmt.Sprintf("%x", shaSum.Sum(nil))}, "-")
 	rev := chrysopoeiav1ac.
-		InstanceRevision(
+		ClaimRevision(
 			revName,
 			claim.GetNamespace(),
 		).
@@ -316,7 +316,7 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 		).
 		WithSpec(
 			chrysopoeiav1ac.
-				InstanceRevisionSpec().
+				ClaimRevisionSpec().
 				WithVersion(versionWithDigest).
 				WithOCIUrl(ociUrl),
 		)
@@ -331,7 +331,7 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 	}
 
 	if err := r.Apply(ctx, rev, client.FieldOwner("chrysopoeia-controller")); err != nil {
-		l.Error(err, "Failed to apply instance revision")
+		l.Error(err, "Failed to apply claim revision")
 		return ctrl.Result{}, err
 	}
 
@@ -365,8 +365,8 @@ func (r *RevisionManager) SetupDynamicControllerWithWatches(dynCtrl controller.T
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &sourcev1.OCIRepository{}, handler.TypedEnqueueRequestForOwner[*sourcev1.OCIRepository](mgr.GetScheme(), mgr.GetRESTMapper(), target))); err != nil {
 		return fmt.Errorf("failed to watch OCIRepository resource: %w", err)
 	}
-	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.InstanceRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.InstanceRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
-		return fmt.Errorf("failed to watch InstanceRevision resource: %w", err)
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.ClaimRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.ClaimRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
+		return fmt.Errorf("failed to watch ClaimRevision resource: %w", err)
 	}
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &corev1.ConfigMap{}, handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, cm *corev1.ConfigMap) []reconcile.Request {
 		l := log.FromContext(ctx).WithName("SetupDynamicControllerWithWatches.mapPlatformValueChangeToAll")
@@ -564,7 +564,7 @@ func setClaimCondition(claim *unstructured.Unstructured, cond metav1.Condition) 
 // means they were.
 //
 // The claim is the chart author's and the user's only view of what went wrong: without this, a
-// broken expression leaves them with no InstanceRevision and no reason for it.
+// broken expression leaves them with no ClaimRevision and no reason for it.
 func recordValuesResolved(claim *unstructured.Unstructured, failure error) error {
 	condition := metav1.Condition{
 		Type:   valuesResolvedCondition,

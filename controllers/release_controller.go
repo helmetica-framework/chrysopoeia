@@ -50,9 +50,9 @@ type ReleaseController struct {
 //+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;roles;rolebindings;clusterrolebindings,verbs=get;list;watch;create;update;patch
 
-//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch
-//+kubebuilder:rbac:groups=helmetica.io,resources=dependencygroups,verbs=get;list;watch
-//+kubebuilder:rbac:groups=helmetica.io,resources=operatorharnesses,verbs=get;list;watch;create;update;patch;delete;deletecollection
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=claimrevisions,verbs=get;list;watch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=dependencygroups,verbs=get;list;watch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=operatorharnesses,verbs=get;list;watch;create;update;patch;delete;deletecollection
 
 //+kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update;patch;create
 
@@ -101,14 +101,14 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 		}
 	}
 
-	var revisions chrysopoeiav1.InstanceRevisionList
+	var revisions chrysopoeiav1.ClaimRevisionList
 	if err := r.List(ctx, &revisions, client.InNamespace(req.Namespace), client.MatchingFields{ownerUIDField: string(claim.GetUID())}); err != nil {
 		return ctrl.Result{}, err
 	}
 	sortByApprovalNewestFirst(revisions.Items)
 
 	if len(revisions.Items) == 0 || revisions.Items[0].Spec.ApprovedAt == nil {
-		l.Info("No approved InstanceRevision found, skipping release")
+		l.Info("No approved ClaimRevision found, skipping release")
 		return ctrl.Result{}, nil
 	}
 	revision := revisions.Items[0]
@@ -225,7 +225,7 @@ func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName strin
 	return nsDelDOne && harnessDelDone, nil
 }
 
-func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstructured.Unstructured, helmNSName string, digest string, revision chrysopoeiav1.InstanceRevision) error {
+func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstructured.Unstructured, helmNSName string, digest string, revision chrysopoeiav1.ClaimRevision) error {
 	const saName = "instance-admin"
 	ownerOpt := client.FieldOwner(fmt.Sprintf("release-controller:%s:%s:%s:%s", r.GVK.Group, r.GVK.Version, r.GVK.Kind, instance.GetName()))
 
@@ -531,24 +531,24 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	return nil
 }
 
-func (r *ReleaseController) findSourceFromClaim(ctx context.Context, u client.Object) (chrysopoeiav1.CustomResourceDefinitionSource, error) {
+func (r *ReleaseController) findSourceFromClaim(ctx context.Context, u client.Object) (chrysopoeiav1.ClaimDefinition, error) {
 	gvk := u.GetObjectKind().GroupVersionKind()
 	gvr, err := r.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
-		return chrysopoeiav1.CustomResourceDefinitionSource{}, fmt.Errorf("unable to map GVK to GVR: %w", err)
+		return chrysopoeiav1.ClaimDefinition{}, fmt.Errorf("unable to map GVK to GVR: %w", err)
 	}
 	var crd apiextv1.CustomResourceDefinition
 	if err := r.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("%s.%s", gvr.Resource.Resource, gvr.Resource.Group)}, &crd); err != nil {
-		return chrysopoeiav1.CustomResourceDefinitionSource{}, fmt.Errorf("unable to load CRD: %w", err)
+		return chrysopoeiav1.ClaimDefinition{}, fmt.Errorf("unable to load CRD: %w", err)
 	}
 	crdsName := crd.Annotations["chrysopoeia.io/source-ref-name"]
 	crdsNamespace := crd.Annotations["chrysopoeia.io/source-ref-namespace"]
 	if crdsName == "" || crdsNamespace == "" {
-		return chrysopoeiav1.CustomResourceDefinitionSource{}, fmt.Errorf("unable to retrieve CustomResourceDefinitionSource from CustomResourceDefinition; name or namespace missing ns=%q name%q", crdsNamespace, crdsName)
+		return chrysopoeiav1.ClaimDefinition{}, fmt.Errorf("unable to retrieve ClaimDefinition from CustomResourceDefinition; name or namespace missing ns=%q name%q", crdsNamespace, crdsName)
 	}
-	var crds chrysopoeiav1.CustomResourceDefinitionSource
+	var crds chrysopoeiav1.ClaimDefinition
 	if err := r.Get(ctx, client.ObjectKey{Namespace: crdsNamespace, Name: crdsName}, &crds); err != nil {
-		return chrysopoeiav1.CustomResourceDefinitionSource{}, fmt.Errorf("unable to load CustomResourceDefinitionSource: %w", err)
+		return chrysopoeiav1.ClaimDefinition{}, fmt.Errorf("unable to load ClaimDefinition: %w", err)
 	}
 	return crds, nil
 }
@@ -589,8 +589,8 @@ func (r *ReleaseController) SetupDynamicControllerWithWatches(dynCtrl controller
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), client.Object(target), &handler.TypedEnqueueRequestForObject[client.Object]{})); err != nil {
 		return fmt.Errorf("failed to watch target resource: %w", err)
 	}
-	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.InstanceRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.InstanceRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
-		return fmt.Errorf("failed to watch InstanceRevision resource: %w", err)
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.ClaimRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.ClaimRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
+		return fmt.Errorf("failed to watch ClaimRevision resource: %w", err)
 	}
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &corev1.Namespace{}, handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, ns *corev1.Namespace) []reconcile.Request {
 		return mapFromClaimAnnotations(ctx, ns)

@@ -6,8 +6,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CustomResourceDefinitionSourceSpec defines the desired state of CustomResourceDefinitionSource.
-type CustomResourceDefinitionSourceSpec struct {
+// ClaimDefinitionSpec defines the desired state of ClaimDefinition.
+type ClaimDefinitionSpec struct {
 	// Reference is a reference to the source of the bundle.
 	Reference SourceReference `json:"reference"`
 
@@ -24,7 +24,7 @@ type CustomResourceDefinitionSourceSpec struct {
 
 	// InstancePermissions defines what permissions are required to deploy the Helm chart.
 	// The default permissions is equal to binding the "admin" aggregate role in the namespace.
-	InstancePermissions CustomResourceDefinitionSourceInstancePermissions `json:"instancePermissions,omitempty"`
+	InstancePermissions ClaimDefinitionInstancePermissions `json:"instancePermissions,omitempty"`
 
 	// Provides lists the DependencyGroups whose CRDs the chart of this source ships. It grants the
 	// chart write access to those CRDs and lets Helm install them; it says nothing about who operates
@@ -49,7 +49,7 @@ type CustomResourceDefinitionSourceSpec struct {
 	Requires []DependencyReference `json:"requires,omitempty"`
 }
 
-type CustomResourceDefinitionSourceInstancePermissions struct {
+type ClaimDefinitionInstancePermissions struct {
 	// AdditionalRules holds additional rules that should be granted on top of the default permissions.
 	AdditionalRules []rbacv1.PolicyRule `json:"additionalRules,omitempty"`
 	// AdditionalClusterRules holds additional cluster scoped rules that should be granted on top of the default permissions.
@@ -125,9 +125,9 @@ type DiscoveryReference struct {
 	Name string `json:"name"`
 }
 
-// CustomResourceDefinitionSourceStatus defines the observed state of CustomResourceDefinitionSource
-type CustomResourceDefinitionSourceStatus struct {
-	// Conditions holds the conditions for the CustomResourceDefinitionSource.
+// ClaimDefinitionStatus defines the observed state of ClaimDefinition
+type ClaimDefinitionStatus struct {
+	// Conditions holds the conditions for the ClaimDefinition.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
@@ -148,24 +148,24 @@ type CustomResourceDefinitionSourceStatus struct {
 //+kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description=""
 //+kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].message",description=""
 
-// CustomResourceDefinitionSource is the Schema for the bundlesources API.
-type CustomResourceDefinitionSource struct {
+// ClaimDefinition is the Schema for the bundlesources API.
+type ClaimDefinition struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   CustomResourceDefinitionSourceSpec   `json:"spec,omitempty"`
-	Status CustomResourceDefinitionSourceStatus `json:"status,omitempty"`
+	Spec   ClaimDefinitionSpec   `json:"spec,omitempty"`
+	Status ClaimDefinitionStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// CustomResourceDefinitionSourceList contains a list of CustomResourceDefinitionSource.
-type CustomResourceDefinitionSourceList struct {
+// ClaimDefinitionList contains a list of ClaimDefinition.
+type ClaimDefinitionList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []CustomResourceDefinitionSource `json:"items"`
+	Items           []ClaimDefinition `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&CustomResourceDefinitionSource{}, &CustomResourceDefinitionSourceList{})
+	SchemeBuilder.Register(&ClaimDefinition{}, &ClaimDefinitionList{})
 }

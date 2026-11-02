@@ -7,11 +7,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// InstanceRevisionSpecApplyConfiguration represents a declarative configuration of the InstanceRevisionSpec type for use
+// ClaimRevisionSpecApplyConfiguration represents a declarative configuration of the ClaimRevisionSpec type for use
 // with apply.
 //
-// InstanceRevisionSpec defines the desired state of InstanceRevision.
-type InstanceRevisionSpecApplyConfiguration struct {
+// ClaimRevisionSpec defines the desired state of ClaimRevision.
+type ClaimRevisionSpecApplyConfiguration struct {
 	// Version is the version of the Helm chart.
 	Version *string `json:"version,omitempty"`
 	// Values is the values of the Helm chart.
@@ -25,16 +25,16 @@ type InstanceRevisionSpecApplyConfiguration struct {
 	ApprovedAt *metav1.Time `json:"approvedAt,omitempty"`
 }
 
-// InstanceRevisionSpecApplyConfiguration constructs a declarative configuration of the InstanceRevisionSpec type for use with
+// ClaimRevisionSpecApplyConfiguration constructs a declarative configuration of the ClaimRevisionSpec type for use with
 // apply.
-func InstanceRevisionSpec() *InstanceRevisionSpecApplyConfiguration {
-	return &InstanceRevisionSpecApplyConfiguration{}
+func ClaimRevisionSpec() *ClaimRevisionSpecApplyConfiguration {
+	return &ClaimRevisionSpecApplyConfiguration{}
 }
 
 // WithVersion sets the Version field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Version field is set to the value of the last call.
-func (b *InstanceRevisionSpecApplyConfiguration) WithVersion(value string) *InstanceRevisionSpecApplyConfiguration {
+func (b *ClaimRevisionSpecApplyConfiguration) WithVersion(value string) *ClaimRevisionSpecApplyConfiguration {
 	b.Version = &value
 	return b
 }
@@ -42,7 +42,7 @@ func (b *InstanceRevisionSpecApplyConfiguration) WithVersion(value string) *Inst
 // WithValues sets the Values field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Values field is set to the value of the last call.
-func (b *InstanceRevisionSpecApplyConfiguration) WithValues(value apiextensionsv1.JSON) *InstanceRevisionSpecApplyConfiguration {
+func (b *ClaimRevisionSpecApplyConfiguration) WithValues(value apiextensionsv1.JSON) *ClaimRevisionSpecApplyConfiguration {
 	b.Values = &value
 	return b
 }
@@ -50,7 +50,7 @@ func (b *InstanceRevisionSpecApplyConfiguration) WithValues(value apiextensionsv
 // WithOCIUrl sets the OCIUrl field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the OCIUrl field is set to the value of the last call.
-func (b *InstanceRevisionSpecApplyConfiguration) WithOCIUrl(value string) *InstanceRevisionSpecApplyConfiguration {
+func (b *ClaimRevisionSpecApplyConfiguration) WithOCIUrl(value string) *ClaimRevisionSpecApplyConfiguration {
 	b.OCIUrl = &value
 	return b
 }
@@ -58,7 +58,7 @@ func (b *InstanceRevisionSpecApplyConfiguration) WithOCIUrl(value string) *Insta
 // WithApprovedAt sets the ApprovedAt field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ApprovedAt field is set to the value of the last call.
-func (b *InstanceRevisionSpecApplyConfiguration) WithApprovedAt(value metav1.Time) *InstanceRevisionSpecApplyConfiguration {
+func (b *ClaimRevisionSpecApplyConfiguration) WithApprovedAt(value metav1.Time) *ClaimRevisionSpecApplyConfiguration {
 	b.ApprovedAt = &value
 	return b
 }

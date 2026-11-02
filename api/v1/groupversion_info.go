@@ -1,7 +1,7 @@
-// Package v1 contains API Schema definitions for the helmetica.io v1 API group
+// Package v1 contains API Schema definitions for the chrysopoeia.helmetica.io v1 API group
 // +kubebuilder:object:generate=true
 // +kubebuilder:ac:generate=true
-// +groupName=helmetica.io
+// +groupName=chrysopoeia.helmetica.io
 package v1
 
 import (
@@ -12,7 +12,7 @@ import (
 var (
 	// SchemeGroupVersion is group version used to register these objects.
 	// This name is used by applyconfiguration generators (e.g. controller-gen).
-	SchemeGroupVersion = schema.GroupVersion{Group: "helmetica.io", Version: "v1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "chrysopoeia.helmetica.io", Version: "v1"}
 
 	// GroupVersion is an alias for SchemeGroupVersion, for backward compatibility.
 	GroupVersion = SchemeGroupVersion

@@ -6,25 +6,25 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
-// CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration represents a declarative configuration of the CustomResourceDefinitionSourceInstancePermissions type for use
+// ClaimDefinitionInstancePermissionsApplyConfiguration represents a declarative configuration of the ClaimDefinitionInstancePermissions type for use
 // with apply.
-type CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration struct {
+type ClaimDefinitionInstancePermissionsApplyConfiguration struct {
 	// AdditionalRules holds additional rules that should be granted on top of the default permissions.
 	AdditionalRules []rbacv1.PolicyRule `json:"additionalRules,omitempty"`
 	// AdditionalClusterRules holds additional cluster scoped rules that should be granted on top of the default permissions.
 	AdditionalClusterRules []rbacv1.PolicyRule `json:"additionalClusterRules,omitempty"`
 }
 
-// CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration constructs a declarative configuration of the CustomResourceDefinitionSourceInstancePermissions type for use with
+// ClaimDefinitionInstancePermissionsApplyConfiguration constructs a declarative configuration of the ClaimDefinitionInstancePermissions type for use with
 // apply.
-func CustomResourceDefinitionSourceInstancePermissions() *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration {
-	return &CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration{}
+func ClaimDefinitionInstancePermissions() *ClaimDefinitionInstancePermissionsApplyConfiguration {
+	return &ClaimDefinitionInstancePermissionsApplyConfiguration{}
 }
 
 // WithAdditionalRules adds the given value to the AdditionalRules field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the AdditionalRules field.
-func (b *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration) WithAdditionalRules(values ...rbacv1.PolicyRule) *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration {
+func (b *ClaimDefinitionInstancePermissionsApplyConfiguration) WithAdditionalRules(values ...rbacv1.PolicyRule) *ClaimDefinitionInstancePermissionsApplyConfiguration {
 	for i := range values {
 		b.AdditionalRules = append(b.AdditionalRules, values[i])
 	}
@@ -34,7 +34,7 @@ func (b *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration) Wi
 // WithAdditionalClusterRules adds the given value to the AdditionalClusterRules field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the AdditionalClusterRules field.
-func (b *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration) WithAdditionalClusterRules(values ...rbacv1.PolicyRule) *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration {
+func (b *ClaimDefinitionInstancePermissionsApplyConfiguration) WithAdditionalClusterRules(values ...rbacv1.PolicyRule) *ClaimDefinitionInstancePermissionsApplyConfiguration {
 	for i := range values {
 		b.AdditionalClusterRules = append(b.AdditionalClusterRules, values[i])
 	}

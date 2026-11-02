@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: operatorharnesses.helmetica.io
+  name: operatorharnesses.chrysopoeia.helmetica.io
 spec:
-  group: helmetica.io
+  group: chrysopoeia.helmetica.io
   names:
     kind: OperatorHarness
     listKind: OperatorHarnessList

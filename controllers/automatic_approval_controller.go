@@ -32,8 +32,8 @@ type AutomaticApprovalManager struct {
 	GVK schema.GroupVersionKind
 }
 
-//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions,verbs=get;list;watch;update;patch
-//+kubebuilder:rbac:groups=helmetica.io,resources=instancerevisions/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=claimrevisions,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=claimrevisions/status,verbs=get;update;patch
 
 func NewAutomaticApprovalManager() DynamicReconciler {
 	return &AutomaticApprovalManager{}
@@ -70,12 +70,12 @@ func (r *AutomaticApprovalManager) Reconcile(ctx context.Context, req reconcile.
 		l.Info("Instance does not have a latest revision, skipping automatic approval")
 		return ctrl.Result{}, nil
 	}
-	var wantedRevision chrysopoeiav1.InstanceRevision
+	var wantedRevision chrysopoeiav1.ClaimRevision
 	if err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: wantedRevisionName}, &wantedRevision); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	var revisions chrysopoeiav1.InstanceRevisionList
+	var revisions chrysopoeiav1.ClaimRevisionList
 	if err := r.List(ctx, &revisions, client.InNamespace(req.Namespace), client.MatchingFields{ownerUIDField: string(claim.GetUID())}); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -83,10 +83,10 @@ func (r *AutomaticApprovalManager) Reconcile(ctx context.Context, req reconcile.
 
 	if len(revisions.Items) == 0 || revisions.Items[0].Name != wantedRevisionName || revisions.Items[0].Spec.ApprovedAt == nil {
 		approvePatch := chrysopoeiav1ac.
-			InstanceRevision(wantedRevision.Name, wantedRevision.Namespace).
+			ClaimRevision(wantedRevision.Name, wantedRevision.Namespace).
 			WithSpec(
 				chrysopoeiav1ac.
-					InstanceRevisionSpec().
+					ClaimRevisionSpec().
 					WithApprovedAt(metav1.Now()))
 		if err := r.Apply(ctx, approvePatch, client.FieldOwner("chrysopoeia:auto-approval-controller")); err != nil {
 			return ctrl.Result{}, err
@@ -113,16 +113,16 @@ func (r *AutomaticApprovalManager) SetupDynamicControllerWithWatches(dynCtrl con
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), client.Object(target), &handler.TypedEnqueueRequestForObject[client.Object]{})); err != nil {
 		return fmt.Errorf("failed to watch target resource: %w", err)
 	}
-	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.InstanceRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.InstanceRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
-		return fmt.Errorf("failed to watch InstanceRevision resource: %w", err)
+	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &chrysopoeiav1.ClaimRevision{}, handler.TypedEnqueueRequestForOwner[*chrysopoeiav1.ClaimRevision](mgr.GetScheme(), mgr.GetRESTMapper(), target, handler.OnlyControllerOwner()))); err != nil {
+		return fmt.Errorf("failed to watch ClaimRevision resource: %w", err)
 	}
 
 	return nil
 }
 
-// sortByCreationTimestampNewestFirst sorts the given slice of InstanceRevision objects by their creation timestamp in descending order (newest first).
-func sortByCreationTimestampNewestFirst(revisions []chrysopoeiav1.InstanceRevision) {
-	slices.SortFunc(revisions, func(a, b chrysopoeiav1.InstanceRevision) int {
+// sortByCreationTimestampNewestFirst sorts the given slice of ClaimRevision objects by their creation timestamp in descending order (newest first).
+func sortByCreationTimestampNewestFirst(revisions []chrysopoeiav1.ClaimRevision) {
+	slices.SortFunc(revisions, func(a, b chrysopoeiav1.ClaimRevision) int {
 		if a.CreationTimestamp.Time.Before(b.CreationTimestamp.Time) {
 			return -1
 		}
@@ -134,9 +134,9 @@ func sortByCreationTimestampNewestFirst(revisions []chrysopoeiav1.InstanceRevisi
 	slices.Reverse(revisions)
 }
 
-// sortByApprovalNewestFirst sorts the given slice of InstanceRevision objects by their approval timestamp in descending order (newest first).
-func sortByApprovalNewestFirst(revisions []chrysopoeiav1.InstanceRevision) {
-	slices.SortFunc(revisions, func(a, b chrysopoeiav1.InstanceRevision) int {
+// sortByApprovalNewestFirst sorts the given slice of ClaimRevision objects by their approval timestamp in descending order (newest first).
+func sortByApprovalNewestFirst(revisions []chrysopoeiav1.ClaimRevision) {
+	slices.SortFunc(revisions, func(a, b chrysopoeiav1.ClaimRevision) int {
 		if a.Spec.ApprovedAt != nil && b.Spec.ApprovedAt != nil {
 			if a.Spec.ApprovedAt.Time.Before(b.Spec.ApprovedAt.Time) {
 				return -1

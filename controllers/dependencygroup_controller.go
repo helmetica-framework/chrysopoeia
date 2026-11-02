@@ -29,8 +29,8 @@ type DependencyGroupManager struct {
 	Recorder events.EventRecorder
 }
 
-//+kubebuilder:rbac:groups=helmetica.io,resources=dependencygroups,verbs=get;list;watch
-//+kubebuilder:rbac:groups=helmetica.io,resources=dependencygroups/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=dependencygroups,verbs=get;list;watch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=dependencygroups/status,verbs=get;update;patch
 
 func (r *DependencyGroupManager) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx).WithName("DependencyGroupManager.Reconcile")

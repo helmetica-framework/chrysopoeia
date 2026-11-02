@@ -84,7 +84,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	// The controller scopes its CustomResourceDefinitionSource cache to this namespace.
+	// The controller scopes its ClaimDefinition cache to this namespace.
 	controllerNS, err := findNamespace(ctx, chrysopoeia)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

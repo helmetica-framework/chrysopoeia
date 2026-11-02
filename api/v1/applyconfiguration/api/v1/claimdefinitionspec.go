@@ -6,11 +6,11 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
-// CustomResourceDefinitionSourceSpecApplyConfiguration represents a declarative configuration of the CustomResourceDefinitionSourceSpec type for use
+// ClaimDefinitionSpecApplyConfiguration represents a declarative configuration of the ClaimDefinitionSpec type for use
 // with apply.
 //
-// CustomResourceDefinitionSourceSpec defines the desired state of CustomResourceDefinitionSource.
-type CustomResourceDefinitionSourceSpecApplyConfiguration struct {
+// ClaimDefinitionSpec defines the desired state of ClaimDefinition.
+type ClaimDefinitionSpecApplyConfiguration struct {
 	// Reference is a reference to the source of the bundle.
 	Reference *SourceReferenceApplyConfiguration `json:"reference,omitempty"`
 	// CRDNames is the `.spec.names` field of the generated [apiextv1.CustomResourceDefinition].
@@ -22,7 +22,7 @@ type CustomResourceDefinitionSourceSpecApplyConfiguration struct {
 	VersionDiscovery *VersionDiscoveryApplyConfiguration `json:"versionDiscovery,omitempty"`
 	// InstancePermissions defines what permissions are required to deploy the Helm chart.
 	// The default permissions is equal to binding the "admin" aggregate role in the namespace.
-	InstancePermissions *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration `json:"instancePermissions,omitempty"`
+	InstancePermissions *ClaimDefinitionInstancePermissionsApplyConfiguration `json:"instancePermissions,omitempty"`
 	// Provides lists the DependencyGroups whose CRDs the chart of this source ships. It grants the
 	// chart write access to those CRDs and lets Helm install them; it says nothing about who operates
 	// them, that is Manages. Exactly one source may provide a group, otherwise two charts install the
@@ -39,16 +39,16 @@ type CustomResourceDefinitionSourceSpecApplyConfiguration struct {
 	Requires []DependencyReferenceApplyConfiguration `json:"requires,omitempty"`
 }
 
-// CustomResourceDefinitionSourceSpecApplyConfiguration constructs a declarative configuration of the CustomResourceDefinitionSourceSpec type for use with
+// ClaimDefinitionSpecApplyConfiguration constructs a declarative configuration of the ClaimDefinitionSpec type for use with
 // apply.
-func CustomResourceDefinitionSourceSpec() *CustomResourceDefinitionSourceSpecApplyConfiguration {
-	return &CustomResourceDefinitionSourceSpecApplyConfiguration{}
+func ClaimDefinitionSpec() *ClaimDefinitionSpecApplyConfiguration {
+	return &ClaimDefinitionSpecApplyConfiguration{}
 }
 
 // WithReference sets the Reference field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Reference field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithReference(value *SourceReferenceApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *ClaimDefinitionSpecApplyConfiguration) WithReference(value *SourceReferenceApplyConfiguration) *ClaimDefinitionSpecApplyConfiguration {
 	b.Reference = value
 	return b
 }
@@ -56,7 +56,7 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithReference(val
 // WithCRDNames sets the CRDNames field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the CRDNames field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithCRDNames(value apiextensionsv1.CustomResourceDefinitionNames) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *ClaimDefinitionSpecApplyConfiguration) WithCRDNames(value apiextensionsv1.CustomResourceDefinitionNames) *ClaimDefinitionSpecApplyConfiguration {
 	b.CRDNames = &value
 	return b
 }
@@ -64,7 +64,7 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithCRDNames(valu
 // WithVersionDiscovery sets the VersionDiscovery field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the VersionDiscovery field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithVersionDiscovery(value *VersionDiscoveryApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *ClaimDefinitionSpecApplyConfiguration) WithVersionDiscovery(value *VersionDiscoveryApplyConfiguration) *ClaimDefinitionSpecApplyConfiguration {
 	b.VersionDiscovery = value
 	return b
 }
@@ -72,7 +72,7 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithVersionDiscov
 // WithInstancePermissions sets the InstancePermissions field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the InstancePermissions field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithInstancePermissions(value *CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *ClaimDefinitionSpecApplyConfiguration) WithInstancePermissions(value *ClaimDefinitionInstancePermissionsApplyConfiguration) *ClaimDefinitionSpecApplyConfiguration {
 	b.InstancePermissions = value
 	return b
 }
@@ -80,7 +80,7 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithInstancePermi
 // WithProvides adds the given value to the Provides field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Provides field.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithProvides(values ...*DependencyReferenceApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *ClaimDefinitionSpecApplyConfiguration) WithProvides(values ...*DependencyReferenceApplyConfiguration) *ClaimDefinitionSpecApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithProvides")
@@ -93,7 +93,7 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithProvides(valu
 // WithManages adds the given value to the Manages field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Manages field.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithManages(values ...*DependencyReferenceApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *ClaimDefinitionSpecApplyConfiguration) WithManages(values ...*DependencyReferenceApplyConfiguration) *ClaimDefinitionSpecApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithManages")
@@ -106,7 +106,7 @@ func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithManages(value
 // WithRequires adds the given value to the Requires field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Requires field.
-func (b *CustomResourceDefinitionSourceSpecApplyConfiguration) WithRequires(values ...*DependencyReferenceApplyConfiguration) *CustomResourceDefinitionSourceSpecApplyConfiguration {
+func (b *ClaimDefinitionSpecApplyConfiguration) WithRequires(values ...*DependencyReferenceApplyConfiguration) *ClaimDefinitionSpecApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithRequires")

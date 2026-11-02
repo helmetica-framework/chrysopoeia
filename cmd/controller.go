@@ -215,7 +215,7 @@ func runController(cmd *cobra.Command, _ []string) error {
 
 		Cache: cache.Options{
 			ByObject: map[client.Object]cache.ByObject{
-				&chrysopoeiav1.CustomResourceDefinitionSource{}: {
+				&chrysopoeiav1.ClaimDefinition{}: {
 					Namespaces: map[string]cache.Config{
 						controllerNamespace: {},
 					},
@@ -258,24 +258,24 @@ func runController(cmd *cobra.Command, _ []string) error {
 
 	lifetimeCtx := cmd.Context()
 
-	if err := controllers.SetupInstanceRevisionOwnerFieldIndex(mgr); err != nil {
-		return fmt.Errorf("unable to set up InstanceRevision owner field index: %w", err)
+	if err := controllers.SetupClaimRevisionOwnerFieldIndex(mgr); err != nil {
+		return fmt.Errorf("unable to set up ClaimRevision owner field index: %w", err)
 	}
 
 	if err := controllers.SetupCustomResourceDefinitionGroupKindFieldIndex(mgr); err != nil {
 		return fmt.Errorf("unable to set up CustomResourceDefinition group/kind field index: %w", err)
 	}
 
-	bsm := &controllers.CustomResourceDefinitionSourceManager{
+	bsm := &controllers.ClaimDefinitionManager{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder("customresourcedefinitionsource-controller"),
+		Recorder: mgr.GetEventRecorder("claimdefinition-controller"),
 
 		SourceControllerHostnameOverride: sourceControllerHostnameOverride,
 		ImageReflectorControllerHostname: imageReflectorControllerHostname,
 	}
-	if err := bsm.SetupWithManager("customresourcedefinitionsource", mgr, controllerNamespace); err != nil {
-		return fmt.Errorf("unable to create CustomResourceDefinitionSource controller: %w", err)
+	if err := bsm.SetupWithManager("claimdefinition", mgr, controllerNamespace); err != nil {
+		return fmt.Errorf("unable to create ClaimDefinition controller: %w", err)
 	}
 
 	dram := &controllers.DynamicCRDsRBACAggregatorManager{

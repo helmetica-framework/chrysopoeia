@@ -61,7 +61,7 @@ const (
 // DependencyGroupStatus defines the observed state of DependencyGroup.
 type DependencyGroupStatus struct {
 	// State is Accepted if the group holds the claim on all of its CRDs, and Rejected otherwise.
-	// Only accepted groups may be referenced by a CustomResourceDefinitionSource.
+	// Only accepted groups may be referenced by a ClaimDefinition.
 	// +optional
 	State DependencyGroupState `json:"state,omitempty"`
 

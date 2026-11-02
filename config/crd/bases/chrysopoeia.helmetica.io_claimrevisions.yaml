@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: instancerevisions.helmetica.io
+  name: claimrevisions.chrysopoeia.helmetica.io
 spec:
-  group: helmetica.io
+  group: chrysopoeia.helmetica.io
   names:
-    kind: InstanceRevision
-    listKind: InstanceRevisionList
-    plural: instancerevisions
-    singular: instancerevision
+    kind: ClaimRevision
+    listKind: ClaimRevisionList
+    plural: claimrevisions
+    singular: claimrevision
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -30,7 +30,7 @@ spec:
     name: v1
     schema:
       openAPIV3Schema:
-        description: InstanceRevision is the Schema for the bundlesources API.
+        description: ClaimRevision is the Schema for the bundlesources API.
         properties:
           apiVersion:
             description: |-
@@ -50,7 +50,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: InstanceRevisionSpec defines the desired state of InstanceRevision.
+            description: ClaimRevisionSpec defines the desired state of ClaimRevision.
             properties:
               approvedAt:
                 description: |-
@@ -76,7 +76,7 @@ spec:
             - version
             type: object
           status:
-            description: InstanceRevisionStatus defines the observed state of InstanceRevision
+            description: ClaimRevisionStatus defines the observed state of ClaimRevision
             type: object
         type: object
     served: true

@@ -23,7 +23,17 @@ func Parser() *typed.Parser {
 var parserOnce sync.Once
 var parser *typed.Parser
 var schemaYAML = typed.YAMLObject(`types:
-- name: com.github.helmetica-framework.chrysopoeia.api.v1.CustomResourceDefinitionSource
+- name: com.github.helmetica-framework.chrysopoeia.api.v1.ClaimDefinition
+  scalar: untyped
+  list:
+    elementType:
+      namedType: __untyped_atomic_
+    elementRelationship: atomic
+  map:
+    elementType:
+      namedType: __untyped_deduced_
+    elementRelationship: separable
+- name: com.github.helmetica-framework.chrysopoeia.api.v1.ClaimRevision
   scalar: untyped
   list:
     elementType:
@@ -106,16 +116,6 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: name
       type:
         scalar: string
-- name: com.github.helmetica-framework.chrysopoeia.api.v1.InstanceRevision
-  scalar: untyped
-  list:
-    elementType:
-      namedType: __untyped_atomic_
-    elementRelationship: atomic
-  map:
-    elementType:
-      namedType: __untyped_deduced_
-    elementRelationship: separable
 - name: com.github.helmetica-framework.chrysopoeia.api.v1.OperatorHarness
   map:
     fields:

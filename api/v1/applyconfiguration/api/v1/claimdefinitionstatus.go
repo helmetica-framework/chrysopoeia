@@ -6,12 +6,12 @@ import (
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// CustomResourceDefinitionSourceStatusApplyConfiguration represents a declarative configuration of the CustomResourceDefinitionSourceStatus type for use
+// ClaimDefinitionStatusApplyConfiguration represents a declarative configuration of the ClaimDefinitionStatus type for use
 // with apply.
 //
-// CustomResourceDefinitionSourceStatus defines the observed state of CustomResourceDefinitionSource
-type CustomResourceDefinitionSourceStatusApplyConfiguration struct {
-	// Conditions holds the conditions for the CustomResourceDefinitionSource.
+// ClaimDefinitionStatus defines the observed state of ClaimDefinition
+type ClaimDefinitionStatusApplyConfiguration struct {
+	// Conditions holds the conditions for the ClaimDefinition.
 	Conditions []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
 	// AppliedReferenceGeneration is the last applied generation of the referenced source.
 	AppliedReferenceGeneration *int64 `json:"appliedReferenceGeneration,omitempty"`
@@ -19,16 +19,16 @@ type CustomResourceDefinitionSourceStatusApplyConfiguration struct {
 	AppliedReferenceRevision *string `json:"appliedReferenceRevision,omitempty"`
 }
 
-// CustomResourceDefinitionSourceStatusApplyConfiguration constructs a declarative configuration of the CustomResourceDefinitionSourceStatus type for use with
+// ClaimDefinitionStatusApplyConfiguration constructs a declarative configuration of the ClaimDefinitionStatus type for use with
 // apply.
-func CustomResourceDefinitionSourceStatus() *CustomResourceDefinitionSourceStatusApplyConfiguration {
-	return &CustomResourceDefinitionSourceStatusApplyConfiguration{}
+func ClaimDefinitionStatus() *ClaimDefinitionStatusApplyConfiguration {
+	return &ClaimDefinitionStatusApplyConfiguration{}
 }
 
 // WithConditions adds the given value to the Conditions field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Conditions field.
-func (b *CustomResourceDefinitionSourceStatusApplyConfiguration) WithConditions(values ...*metav1.ConditionApplyConfiguration) *CustomResourceDefinitionSourceStatusApplyConfiguration {
+func (b *ClaimDefinitionStatusApplyConfiguration) WithConditions(values ...*metav1.ConditionApplyConfiguration) *ClaimDefinitionStatusApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithConditions")
@@ -41,7 +41,7 @@ func (b *CustomResourceDefinitionSourceStatusApplyConfiguration) WithConditions(
 // WithAppliedReferenceGeneration sets the AppliedReferenceGeneration field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the AppliedReferenceGeneration field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceStatusApplyConfiguration) WithAppliedReferenceGeneration(value int64) *CustomResourceDefinitionSourceStatusApplyConfiguration {
+func (b *ClaimDefinitionStatusApplyConfiguration) WithAppliedReferenceGeneration(value int64) *ClaimDefinitionStatusApplyConfiguration {
 	b.AppliedReferenceGeneration = &value
 	return b
 }
@@ -49,7 +49,7 @@ func (b *CustomResourceDefinitionSourceStatusApplyConfiguration) WithAppliedRefe
 // WithAppliedReferenceRevision sets the AppliedReferenceRevision field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the AppliedReferenceRevision field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceStatusApplyConfiguration) WithAppliedReferenceRevision(value string) *CustomResourceDefinitionSourceStatusApplyConfiguration {
+func (b *ClaimDefinitionStatusApplyConfiguration) WithAppliedReferenceRevision(value string) *ClaimDefinitionStatusApplyConfiguration {
 	b.AppliedReferenceRevision = &value
 	return b
 }

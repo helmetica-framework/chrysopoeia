@@ -16,8 +16,8 @@ const (
 	crdGroupKindField = "spec.group+spec.names.kind"
 )
 
-func SetupInstanceRevisionOwnerFieldIndex(mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(context.Background(), &chrysopoeiav1.InstanceRevision{}, ownerUIDField, func(rawObj client.Object) []string {
+func SetupClaimRevisionOwnerFieldIndex(mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(context.Background(), &chrysopoeiav1.ClaimRevision{}, ownerUIDField, func(rawObj client.Object) []string {
 		refs := rawObj.GetOwnerReferences()
 		uids := make([]string, len(refs))
 		for i, ref := range refs {
