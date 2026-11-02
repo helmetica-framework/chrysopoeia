@@ -3,7 +3,7 @@
 > chrysopoeia (from Ancient Greek χρυσοποιία (khrusopoiía) 'gold-making')
 
 A controller creating CRDs from Helm charts by translating their `values.yaml`.
-Every change to the instances from the created CRDs is preserved in an `InstanceRevision`.
+Every change to the instances from the created CRDs is preserved in an `ClaimRevision`.
 
 The most recent approved revision is deployed using FluxCDs [Helm controller](https://fluxcd.io/flux/components/helm/).
 
@@ -88,8 +88,8 @@ data:
 would generate the following revision:
 
 ```yaml
-apiVersion: helmetica.io/v1
-kind: InstanceRevision
+apiVersion: chrysopoeia.helmetica.io/v1
+kind: ClaimRevision
 metadata:
   name: claim-XXXX
 spec:

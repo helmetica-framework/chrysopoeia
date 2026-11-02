@@ -11,75 +11,75 @@ import (
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// InstanceRevisionApplyConfiguration represents a declarative configuration of the InstanceRevision type for use
+// ClaimDefinitionApplyConfiguration represents a declarative configuration of the ClaimDefinition type for use
 // with apply.
 //
-// InstanceRevision is the Schema for the bundlesources API.
-type InstanceRevisionApplyConfiguration struct {
+// ClaimDefinition is the Schema for the bundlesources API.
+type ClaimDefinitionApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *InstanceRevisionSpecApplyConfiguration `json:"spec,omitempty"`
-	Status                               *apiv1.InstanceRevisionStatus           `json:"status,omitempty"`
+	Spec                                 *ClaimDefinitionSpecApplyConfiguration   `json:"spec,omitempty"`
+	Status                               *ClaimDefinitionStatusApplyConfiguration `json:"status,omitempty"`
 }
 
-// InstanceRevision constructs a declarative configuration of the InstanceRevision type for use with
+// ClaimDefinition constructs a declarative configuration of the ClaimDefinition type for use with
 // apply.
-func InstanceRevision(name, namespace string) *InstanceRevisionApplyConfiguration {
-	b := &InstanceRevisionApplyConfiguration{}
+func ClaimDefinition(name, namespace string) *ClaimDefinitionApplyConfiguration {
+	b := &ClaimDefinitionApplyConfiguration{}
 	b.WithName(name)
 	b.WithNamespace(namespace)
-	b.WithKind("InstanceRevision")
-	b.WithAPIVersion("helmetica.io/v1")
+	b.WithKind("ClaimDefinition")
+	b.WithAPIVersion("chrysopoeia.helmetica.io/v1")
 	return b
 }
 
-// ExtractInstanceRevisionFrom extracts the applied configuration owned by fieldManager from
-// instanceRevision for the specified subresource. Pass an empty string for subresource to extract
+// ExtractClaimDefinitionFrom extracts the applied configuration owned by fieldManager from
+// claimDefinition for the specified subresource. Pass an empty string for subresource to extract
 // the main resource. Common subresources include "status", "scale", etc.
-// instanceRevision must be a unmodified InstanceRevision API object that was retrieved from the Kubernetes API.
-// ExtractInstanceRevisionFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// claimDefinition must be a unmodified ClaimDefinition API object that was retrieved from the Kubernetes API.
+// ExtractClaimDefinitionFrom provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractInstanceRevisionFrom(instanceRevision *apiv1.InstanceRevision, fieldManager string, subresource string) (*InstanceRevisionApplyConfiguration, error) {
-	b := &InstanceRevisionApplyConfiguration{}
-	err := managedfields.ExtractInto(instanceRevision, internal.Parser().Type("com.github.helmetica-framework.chrysopoeia.api.v1.InstanceRevision"), fieldManager, b, subresource)
+func ExtractClaimDefinitionFrom(claimDefinition *apiv1.ClaimDefinition, fieldManager string, subresource string) (*ClaimDefinitionApplyConfiguration, error) {
+	b := &ClaimDefinitionApplyConfiguration{}
+	err := managedfields.ExtractInto(claimDefinition, internal.Parser().Type("com.github.helmetica-framework.chrysopoeia.api.v1.ClaimDefinition"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}
-	b.WithName(instanceRevision.Name)
-	b.WithNamespace(instanceRevision.Namespace)
+	b.WithName(claimDefinition.Name)
+	b.WithNamespace(claimDefinition.Namespace)
 
-	b.WithKind("InstanceRevision")
-	b.WithAPIVersion("helmetica.io/v1")
+	b.WithKind("ClaimDefinition")
+	b.WithAPIVersion("chrysopoeia.helmetica.io/v1")
 	return b, nil
 }
 
-// ExtractInstanceRevision extracts the applied configuration owned by fieldManager from
-// instanceRevision. If no managedFields are found in instanceRevision for fieldManager, a
-// InstanceRevisionApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// ExtractClaimDefinition extracts the applied configuration owned by fieldManager from
+// claimDefinition. If no managedFields are found in claimDefinition for fieldManager, a
+// ClaimDefinitionApplyConfiguration is returned with only the Name, Namespace (if applicable),
 // APIVersion and Kind populated. It is possible that no managed fields were found for because other
 // field managers have taken ownership of all the fields previously owned by fieldManager, or because
 // the fieldManager never owned fields any fields.
-// instanceRevision must be a unmodified InstanceRevision API object that was retrieved from the Kubernetes API.
-// ExtractInstanceRevision provides a way to perform a extract/modify-in-place/apply workflow.
+// claimDefinition must be a unmodified ClaimDefinition API object that was retrieved from the Kubernetes API.
+// ExtractClaimDefinition provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractInstanceRevision(instanceRevision *apiv1.InstanceRevision, fieldManager string) (*InstanceRevisionApplyConfiguration, error) {
-	return ExtractInstanceRevisionFrom(instanceRevision, fieldManager, "")
+func ExtractClaimDefinition(claimDefinition *apiv1.ClaimDefinition, fieldManager string) (*ClaimDefinitionApplyConfiguration, error) {
+	return ExtractClaimDefinitionFrom(claimDefinition, fieldManager, "")
 }
 
-// ExtractInstanceRevisionStatus extracts the applied configuration owned by fieldManager from
-// instanceRevision for the status subresource.
-func ExtractInstanceRevisionStatus(instanceRevision *apiv1.InstanceRevision, fieldManager string) (*InstanceRevisionApplyConfiguration, error) {
-	return ExtractInstanceRevisionFrom(instanceRevision, fieldManager, "status")
+// ExtractClaimDefinitionStatus extracts the applied configuration owned by fieldManager from
+// claimDefinition for the status subresource.
+func ExtractClaimDefinitionStatus(claimDefinition *apiv1.ClaimDefinition, fieldManager string) (*ClaimDefinitionApplyConfiguration, error) {
+	return ExtractClaimDefinitionFrom(claimDefinition, fieldManager, "status")
 }
 
-func (b InstanceRevisionApplyConfiguration) IsApplyConfiguration() {}
+func (b ClaimDefinitionApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kind field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithKind(value string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithKind(value string) *ClaimDefinitionApplyConfiguration {
 	b.TypeMetaApplyConfiguration.Kind = &value
 	return b
 }
@@ -87,7 +87,7 @@ func (b *InstanceRevisionApplyConfiguration) WithKind(value string) *InstanceRev
 // WithAPIVersion sets the APIVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the APIVersion field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithAPIVersion(value string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithAPIVersion(value string) *ClaimDefinitionApplyConfiguration {
 	b.TypeMetaApplyConfiguration.APIVersion = &value
 	return b
 }
@@ -95,7 +95,7 @@ func (b *InstanceRevisionApplyConfiguration) WithAPIVersion(value string) *Insta
 // WithName sets the Name field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithName(value string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithName(value string) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Name = &value
 	return b
@@ -104,7 +104,7 @@ func (b *InstanceRevisionApplyConfiguration) WithName(value string) *InstanceRev
 // WithGenerateName sets the GenerateName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the GenerateName field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithGenerateName(value string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithGenerateName(value string) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.GenerateName = &value
 	return b
@@ -113,7 +113,7 @@ func (b *InstanceRevisionApplyConfiguration) WithGenerateName(value string) *Ins
 // WithNamespace sets the Namespace field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Namespace field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithNamespace(value string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithNamespace(value string) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Namespace = &value
 	return b
@@ -122,7 +122,7 @@ func (b *InstanceRevisionApplyConfiguration) WithNamespace(value string) *Instan
 // WithUID sets the UID field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the UID field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithUID(value types.UID) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithUID(value types.UID) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.UID = &value
 	return b
@@ -131,7 +131,7 @@ func (b *InstanceRevisionApplyConfiguration) WithUID(value types.UID) *InstanceR
 // WithResourceVersion sets the ResourceVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ResourceVersion field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithResourceVersion(value string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithResourceVersion(value string) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.ResourceVersion = &value
 	return b
@@ -140,7 +140,7 @@ func (b *InstanceRevisionApplyConfiguration) WithResourceVersion(value string) *
 // WithGeneration sets the Generation field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Generation field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithGeneration(value int64) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithGeneration(value int64) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Generation = &value
 	return b
@@ -149,7 +149,7 @@ func (b *InstanceRevisionApplyConfiguration) WithGeneration(value int64) *Instan
 // WithCreationTimestamp sets the CreationTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the CreationTimestamp field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithCreationTimestamp(value apismetav1.Time) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithCreationTimestamp(value apismetav1.Time) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.CreationTimestamp = &value
 	return b
@@ -158,7 +158,7 @@ func (b *InstanceRevisionApplyConfiguration) WithCreationTimestamp(value apismet
 // WithDeletionTimestamp sets the DeletionTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionTimestamp field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithDeletionTimestamp(value apismetav1.Time) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithDeletionTimestamp(value apismetav1.Time) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionTimestamp = &value
 	return b
@@ -167,7 +167,7 @@ func (b *InstanceRevisionApplyConfiguration) WithDeletionTimestamp(value apismet
 // WithDeletionGracePeriodSeconds sets the DeletionGracePeriodSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionGracePeriodSeconds field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionGracePeriodSeconds = &value
 	return b
@@ -177,7 +177,7 @@ func (b *InstanceRevisionApplyConfiguration) WithDeletionGracePeriodSeconds(valu
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Labels field,
 // overwriting an existing map entries in Labels field with the same key.
-func (b *InstanceRevisionApplyConfiguration) WithLabels(entries map[string]string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithLabels(entries map[string]string) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Labels == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Labels = make(map[string]string, len(entries))
@@ -192,7 +192,7 @@ func (b *InstanceRevisionApplyConfiguration) WithLabels(entries map[string]strin
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Annotations field,
 // overwriting an existing map entries in Annotations field with the same key.
-func (b *InstanceRevisionApplyConfiguration) WithAnnotations(entries map[string]string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithAnnotations(entries map[string]string) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Annotations == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Annotations = make(map[string]string, len(entries))
@@ -206,7 +206,7 @@ func (b *InstanceRevisionApplyConfiguration) WithAnnotations(entries map[string]
 // WithOwnerReferences adds the given value to the OwnerReferences field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the OwnerReferences field.
-func (b *InstanceRevisionApplyConfiguration) WithOwnerReferences(values ...*metav1.OwnerReferenceApplyConfiguration) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithOwnerReferences(values ...*metav1.OwnerReferenceApplyConfiguration) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		if values[i] == nil {
@@ -220,7 +220,7 @@ func (b *InstanceRevisionApplyConfiguration) WithOwnerReferences(values ...*meta
 // WithFinalizers adds the given value to the Finalizers field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Finalizers field.
-func (b *InstanceRevisionApplyConfiguration) WithFinalizers(values ...string) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithFinalizers(values ...string) *ClaimDefinitionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		b.ObjectMetaApplyConfiguration.Finalizers = append(b.ObjectMetaApplyConfiguration.Finalizers, values[i])
@@ -228,7 +228,7 @@ func (b *InstanceRevisionApplyConfiguration) WithFinalizers(values ...string) *I
 	return b
 }
 
-func (b *InstanceRevisionApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
+func (b *ClaimDefinitionApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
 	if b.ObjectMetaApplyConfiguration == nil {
 		b.ObjectMetaApplyConfiguration = &metav1.ObjectMetaApplyConfiguration{}
 	}
@@ -237,7 +237,7 @@ func (b *InstanceRevisionApplyConfiguration) ensureObjectMetaApplyConfigurationE
 // WithSpec sets the Spec field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Spec field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithSpec(value *InstanceRevisionSpecApplyConfiguration) *InstanceRevisionApplyConfiguration {
+func (b *ClaimDefinitionApplyConfiguration) WithSpec(value *ClaimDefinitionSpecApplyConfiguration) *ClaimDefinitionApplyConfiguration {
 	b.Spec = value
 	return b
 }
@@ -245,29 +245,29 @@ func (b *InstanceRevisionApplyConfiguration) WithSpec(value *InstanceRevisionSpe
 // WithStatus sets the Status field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Status field is set to the value of the last call.
-func (b *InstanceRevisionApplyConfiguration) WithStatus(value apiv1.InstanceRevisionStatus) *InstanceRevisionApplyConfiguration {
-	b.Status = &value
+func (b *ClaimDefinitionApplyConfiguration) WithStatus(value *ClaimDefinitionStatusApplyConfiguration) *ClaimDefinitionApplyConfiguration {
+	b.Status = value
 	return b
 }
 
 // GetKind retrieves the value of the Kind field in the declarative configuration.
-func (b *InstanceRevisionApplyConfiguration) GetKind() *string {
+func (b *ClaimDefinitionApplyConfiguration) GetKind() *string {
 	return b.TypeMetaApplyConfiguration.Kind
 }
 
 // GetAPIVersion retrieves the value of the APIVersion field in the declarative configuration.
-func (b *InstanceRevisionApplyConfiguration) GetAPIVersion() *string {
+func (b *ClaimDefinitionApplyConfiguration) GetAPIVersion() *string {
 	return b.TypeMetaApplyConfiguration.APIVersion
 }
 
 // GetName retrieves the value of the Name field in the declarative configuration.
-func (b *InstanceRevisionApplyConfiguration) GetName() *string {
+func (b *ClaimDefinitionApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Name
 }
 
 // GetNamespace retrieves the value of the Namespace field in the declarative configuration.
-func (b *InstanceRevisionApplyConfiguration) GetNamespace() *string {
+func (b *ClaimDefinitionApplyConfiguration) GetNamespace() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Namespace
 }

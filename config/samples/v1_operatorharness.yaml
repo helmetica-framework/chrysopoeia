@@ -1,4 +1,4 @@
-apiVersion: helmetica.io/v1
+apiVersion: chrysopoeia.helmetica.io/v1
 kind: OperatorHarness
 metadata:
   labels:

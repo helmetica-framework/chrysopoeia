@@ -371,7 +371,7 @@ fractional: "cel: 1.5"
 }
 
 func TestApply_SurvivesRoundTrippingThroughJSON(t *testing.T) {
-	// The controller writes this into an InstanceRevision and later reads it back. If the two are
+	// The controller writes this into an ClaimRevision and later reads it back. If the two are
 	// not equal, every reconcile sees a difference and writes again.
 	p, err := celvalues.New([]byte("n: 0\ncomputed: \"cel: values.n * 2\"\n"))
 	require.NoError(t, err)

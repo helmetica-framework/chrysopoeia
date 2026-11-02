@@ -30,7 +30,7 @@ func OperatorHarness(name string) *OperatorHarnessApplyConfiguration {
 	b := &OperatorHarnessApplyConfiguration{}
 	b.WithName(name)
 	b.WithKind("OperatorHarness")
-	b.WithAPIVersion("helmetica.io/v1")
+	b.WithAPIVersion("chrysopoeia.helmetica.io/v1")
 	return b
 }
 
@@ -50,7 +50,7 @@ func ExtractOperatorHarnessFrom(operatorHarness *apiv1.OperatorHarness, fieldMan
 	b.WithName(operatorHarness.Name)
 
 	b.WithKind("OperatorHarness")
-	b.WithAPIVersion("helmetica.io/v1")
+	b.WithAPIVersion("chrysopoeia.helmetica.io/v1")
 	return b, nil
 }
 

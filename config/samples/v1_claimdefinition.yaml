@@ -22,8 +22,8 @@ spec:
   interval: 5m
   provider: generic
 ---
-apiVersion: helmetica.io/v1
-kind: CustomResourceDefinitionSource
+apiVersion: chrysopoeia.helmetica.io/v1
+kind: ClaimDefinition
 metadata:
   labels:
     app.kubernetes.io/name: chrysopoeia

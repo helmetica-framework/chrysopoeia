@@ -89,8 +89,8 @@ type OperatorHarnessManager struct {
 	WebhookService WebhookService
 }
 
-//+kubebuilder:rbac:groups=helmetica.io,resources=operatorharnesses,verbs=get;list;watch
-//+kubebuilder:rbac:groups=helmetica.io,resources=operatorharnesses/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=operatorharnesses,verbs=get;list;watch
+//+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=operatorharnesses/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch

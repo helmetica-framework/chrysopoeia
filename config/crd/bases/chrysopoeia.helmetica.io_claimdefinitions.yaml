@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.22.0
-  name: customresourcedefinitionsources.helmetica.io
+  name: claimdefinitions.chrysopoeia.helmetica.io
 spec:
-  group: helmetica.io
+  group: chrysopoeia.helmetica.io
   names:
-    kind: CustomResourceDefinitionSource
-    listKind: CustomResourceDefinitionSourceList
-    plural: customresourcedefinitionsources
-    singular: customresourcedefinitionsource
+    kind: ClaimDefinition
+    listKind: ClaimDefinitionList
+    plural: claimdefinitions
+    singular: claimdefinition
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -30,8 +30,7 @@ spec:
     name: v1
     schema:
       openAPIV3Schema:
-        description: CustomResourceDefinitionSource is the Schema for the bundlesources
-          API.
+        description: ClaimDefinition is the Schema for the bundlesources API.
         properties:
           apiVersion:
             description: |-
@@ -51,8 +50,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: CustomResourceDefinitionSourceSpec defines the desired state
-              of CustomResourceDefinitionSource.
+            description: ClaimDefinitionSpec defines the desired state of ClaimDefinition.
             properties:
               crdNames:
                 description: |-
@@ -364,8 +362,7 @@ spec:
             - reference
             type: object
           status:
-            description: CustomResourceDefinitionSourceStatus defines the observed
-              state of CustomResourceDefinitionSource
+            description: ClaimDefinitionStatus defines the observed state of ClaimDefinition
             properties:
               appliedReferenceGeneration:
                 description: AppliedReferenceGeneration is the last applied generation
@@ -377,7 +374,7 @@ spec:
                   of the referenced source.
                 type: string
               conditions:
-                description: Conditions holds the conditions for the CustomResourceDefinitionSource.
+                description: Conditions holds the conditions for the ClaimDefinition.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

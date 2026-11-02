@@ -30,7 +30,7 @@ func DependencyGroup(name string) *DependencyGroupApplyConfiguration {
 	b := &DependencyGroupApplyConfiguration{}
 	b.WithName(name)
 	b.WithKind("DependencyGroup")
-	b.WithAPIVersion("helmetica.io/v1")
+	b.WithAPIVersion("chrysopoeia.helmetica.io/v1")
 	return b
 }
 
@@ -50,7 +50,7 @@ func ExtractDependencyGroupFrom(dependencyGroup *apiv1.DependencyGroup, fieldMan
 	b.WithName(dependencyGroup.Name)
 
 	b.WithKind("DependencyGroup")
-	b.WithAPIVersion("helmetica.io/v1")
+	b.WithAPIVersion("chrysopoeia.helmetica.io/v1")
 	return b, nil
 }
 

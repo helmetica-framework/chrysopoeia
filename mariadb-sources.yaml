@@ -1,4 +1,4 @@
-apiVersion: helmetica.io/v1
+apiVersion: chrysopoeia.helmetica.io/v1
 kind: DependencyGroup
 metadata:
   name: mariadb
@@ -22,8 +22,8 @@ spec:
     kind: OperatorHarness
     name: mariadb
 ---
-apiVersion: helmetica.io/v1
-kind: CustomResourceDefinitionSource
+apiVersion: chrysopoeia.helmetica.io/v1
+kind: ClaimDefinition
 metadata:
   name: v26.mariadb-crds
 spec:
@@ -67,8 +67,8 @@ spec:
   timeout: 60s
   url: oci://ghcr.io/mariadb-operator/charts/mariadb-operator-crds
 ---
-apiVersion: helmetica.io/v1
-kind: CustomResourceDefinitionSource
+apiVersion: chrysopoeia.helmetica.io/v1
+kind: ClaimDefinition
 metadata:
   name: v26.mariadb-operator
 spec:
@@ -114,8 +114,8 @@ spec:
   timeout: 60s
   url: oci://ghcr.io/mariadb-operator/charts/mariadb-operator
 ---
-apiVersion: helmetica.io/v1
-kind: CustomResourceDefinitionSource
+apiVersion: chrysopoeia.helmetica.io/v1
+kind: ClaimDefinition
 metadata:
   name: v26.mariadb-cluster
 spec:

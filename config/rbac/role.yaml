@@ -66,40 +66,29 @@ rules:
   verbs:
   - update
 - apiGroups:
-  - helm.toolkit.fluxcd.io
+  - chrysopoeia.helmetica.io
   resources:
-  - helmreleases
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - helmetica.io
-  resources:
-  - customresourcedefinitionsources
+  - claimdefinitions
   - dependencygroups
   verbs:
   - get
   - list
   - watch
 - apiGroups:
-  - helmetica.io
+  - chrysopoeia.helmetica.io
   resources:
-  - customresourcedefinitionsources/status
+  - claimdefinitions/status
+  - claimrevisions/status
   - dependencygroups/status
-  - instancerevisions/status
   - operatorharnesses/status
   verbs:
   - get
   - patch
   - update
 - apiGroups:
-  - helmetica.io
+  - chrysopoeia.helmetica.io
   resources:
-  - instancerevisions
+  - claimrevisions
   verbs:
   - create
   - delete
@@ -109,13 +98,24 @@ rules:
   - update
   - watch
 - apiGroups:
-  - helmetica.io
+  - chrysopoeia.helmetica.io
   resources:
   - operatorharnesses
   verbs:
   - create
   - delete
   - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - helm.toolkit.fluxcd.io
+  resources:
+  - helmreleases
+  verbs:
+  - create
   - get
   - list
   - patch

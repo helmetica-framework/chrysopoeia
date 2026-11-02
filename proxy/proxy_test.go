@@ -85,26 +85,26 @@ func Test_Proxy(t *testing.T) {
 		dc, err := dynamic.NewForConfig(harnessedControllerRestConfig)
 		require.NoError(t, err)
 		createRes, err := dc.Resource(schema.GroupVersionResource{
-			Group:    "helmetica.io",
+			Group:    "chrysopoeia.helmetica.io",
 			Version:  "v1",
-			Resource: "instancerevisions",
+			Resource: "claimrevisions",
 		}).Namespace("default").Create(t.Context(), &unstructured.Unstructured{
 			Object: map[string]any{
-				"apiVersion": "helmetica.io/v1",
-				"kind":       "InstanceRevision",
+				"apiVersion": "chrysopoeia.helmetica.io/v1",
+				"kind":       "ClaimRevision",
 				"metadata":   map[string]any{"name": "custom-resource"},
 			},
 		}, metav1.CreateOptions{})
 		require.NoError(t, err)
 		assert.Equal(t, map[string]string{testScope: ""}, createRes.GetLabels())
 		applyRes, err := dc.Resource(schema.GroupVersionResource{
-			Group:    "helmetica.io",
+			Group:    "chrysopoeia.helmetica.io",
 			Version:  "v1",
-			Resource: "instancerevisions",
+			Resource: "claimrevisions",
 		}).Namespace("default").Apply(t.Context(), "custom-resource", &unstructured.Unstructured{
 			Object: map[string]any{
-				"apiVersion": "helmetica.io/v1",
-				"kind":       "InstanceRevision",
+				"apiVersion": "chrysopoeia.helmetica.io/v1",
+				"kind":       "ClaimRevision",
 				"metadata":   map[string]any{"name": "custom-resource", "annotations": map[string]any{"apply": "test"}},
 			},
 		}, metav1.ApplyOptions{FieldManager: "test"})
@@ -113,9 +113,9 @@ func Test_Proxy(t *testing.T) {
 		subject := applyRes.DeepCopy()
 		require.NoError(t, unstructured.SetNestedField(subject.Object, "test", "metadata", "annotations", "updatetest"))
 		updateRes, err := dc.Resource(schema.GroupVersionResource{
-			Group:    "helmetica.io",
+			Group:    "chrysopoeia.helmetica.io",
 			Version:  "v1",
-			Resource: "instancerevisions",
+			Resource: "claimrevisions",
 		}).Namespace("default").Update(t.Context(), subject, metav1.UpdateOptions{})
 		require.NoError(t, err)
 		assert.Equal(t, map[string]string{testScope: ""}, updateRes.GetLabels())
@@ -302,8 +302,8 @@ func setupHarnessedControllerRBAC(t *testing.T, adminClientset *kubernetes.Clien
 				Resources: []string{"configmaps"},
 				Verbs:     []string{"*"},
 			}, {
-				APIGroups: []string{"helmetica.io"},
-				Resources: []string{"instancerevisions"},
+				APIGroups: []string{"chrysopoeia.helmetica.io"},
+				Resources: []string{"claimrevisions"},
 				Verbs:     []string{"*"},
 			},
 		},

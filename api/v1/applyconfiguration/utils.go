@@ -15,15 +15,19 @@ import (
 // apply configuration type exists for the given GroupVersionKind.
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
-	// Group=helmetica.io, Version=v1
-	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSource"):
-		return &apiv1.CustomResourceDefinitionSourceApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSourceInstancePermissions"):
-		return &apiv1.CustomResourceDefinitionSourceInstancePermissionsApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSourceSpec"):
-		return &apiv1.CustomResourceDefinitionSourceSpecApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("CustomResourceDefinitionSourceStatus"):
-		return &apiv1.CustomResourceDefinitionSourceStatusApplyConfiguration{}
+	// Group=chrysopoeia.helmetica.io, Version=v1
+	case v1.SchemeGroupVersion.WithKind("ClaimDefinition"):
+		return &apiv1.ClaimDefinitionApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ClaimDefinitionInstancePermissions"):
+		return &apiv1.ClaimDefinitionInstancePermissionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ClaimDefinitionSpec"):
+		return &apiv1.ClaimDefinitionSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ClaimDefinitionStatus"):
+		return &apiv1.ClaimDefinitionStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ClaimRevision"):
+		return &apiv1.ClaimRevisionApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ClaimRevisionSpec"):
+		return &apiv1.ClaimRevisionSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DependencyGroup"):
 		return &apiv1.DependencyGroupApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DependencyGroupCRD"):
@@ -40,10 +44,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1.DiscoveryReferenceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HarnessReference"):
 		return &apiv1.HarnessReferenceApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("InstanceRevision"):
-		return &apiv1.InstanceRevisionApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("InstanceRevisionSpec"):
-		return &apiv1.InstanceRevisionSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("OperatorHarness"):
 		return &apiv1.OperatorHarnessApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("OperatorHarnessOperator"):

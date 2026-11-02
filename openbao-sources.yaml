@@ -1,5 +1,5 @@
-apiVersion: helmetica.io/v1
-kind: CustomResourceDefinitionSource
+apiVersion: chrysopoeia.helmetica.io/v1
+kind: ClaimDefinition
 metadata:
   name: v0.28.openbao
 spec:

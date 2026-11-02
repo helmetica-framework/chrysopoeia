@@ -13,7 +13,7 @@ import (
 // DependencyGroupStatus defines the observed state of DependencyGroup.
 type DependencyGroupStatusApplyConfiguration struct {
 	// State is Accepted if the group holds the claim on all of its CRDs, and Rejected otherwise.
-	// Only accepted groups may be referenced by a CustomResourceDefinitionSource.
+	// Only accepted groups may be referenced by a ClaimDefinition.
 	State *apiv1.DependencyGroupState `json:"state,omitempty"`
 	// Conditions holds the conditions for the DependencyGroup. The Accepted condition carries the
 	// reason a group was rejected.

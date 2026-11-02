@@ -11,75 +11,75 @@ import (
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// CustomResourceDefinitionSourceApplyConfiguration represents a declarative configuration of the CustomResourceDefinitionSource type for use
+// ClaimRevisionApplyConfiguration represents a declarative configuration of the ClaimRevision type for use
 // with apply.
 //
-// CustomResourceDefinitionSource is the Schema for the bundlesources API.
-type CustomResourceDefinitionSourceApplyConfiguration struct {
+// ClaimRevision is the Schema for the bundlesources API.
+type ClaimRevisionApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *CustomResourceDefinitionSourceSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                               *CustomResourceDefinitionSourceStatusApplyConfiguration `json:"status,omitempty"`
+	Spec                                 *ClaimRevisionSpecApplyConfiguration `json:"spec,omitempty"`
+	Status                               *apiv1.ClaimRevisionStatus           `json:"status,omitempty"`
 }
 
-// CustomResourceDefinitionSource constructs a declarative configuration of the CustomResourceDefinitionSource type for use with
+// ClaimRevision constructs a declarative configuration of the ClaimRevision type for use with
 // apply.
-func CustomResourceDefinitionSource(name, namespace string) *CustomResourceDefinitionSourceApplyConfiguration {
-	b := &CustomResourceDefinitionSourceApplyConfiguration{}
+func ClaimRevision(name, namespace string) *ClaimRevisionApplyConfiguration {
+	b := &ClaimRevisionApplyConfiguration{}
 	b.WithName(name)
 	b.WithNamespace(namespace)
-	b.WithKind("CustomResourceDefinitionSource")
-	b.WithAPIVersion("helmetica.io/v1")
+	b.WithKind("ClaimRevision")
+	b.WithAPIVersion("chrysopoeia.helmetica.io/v1")
 	return b
 }
 
-// ExtractCustomResourceDefinitionSourceFrom extracts the applied configuration owned by fieldManager from
-// customResourceDefinitionSource for the specified subresource. Pass an empty string for subresource to extract
+// ExtractClaimRevisionFrom extracts the applied configuration owned by fieldManager from
+// claimRevision for the specified subresource. Pass an empty string for subresource to extract
 // the main resource. Common subresources include "status", "scale", etc.
-// customResourceDefinitionSource must be a unmodified CustomResourceDefinitionSource API object that was retrieved from the Kubernetes API.
-// ExtractCustomResourceDefinitionSourceFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// claimRevision must be a unmodified ClaimRevision API object that was retrieved from the Kubernetes API.
+// ExtractClaimRevisionFrom provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractCustomResourceDefinitionSourceFrom(customResourceDefinitionSource *apiv1.CustomResourceDefinitionSource, fieldManager string, subresource string) (*CustomResourceDefinitionSourceApplyConfiguration, error) {
-	b := &CustomResourceDefinitionSourceApplyConfiguration{}
-	err := managedfields.ExtractInto(customResourceDefinitionSource, internal.Parser().Type("com.github.helmetica-framework.chrysopoeia.api.v1.CustomResourceDefinitionSource"), fieldManager, b, subresource)
+func ExtractClaimRevisionFrom(claimRevision *apiv1.ClaimRevision, fieldManager string, subresource string) (*ClaimRevisionApplyConfiguration, error) {
+	b := &ClaimRevisionApplyConfiguration{}
+	err := managedfields.ExtractInto(claimRevision, internal.Parser().Type("com.github.helmetica-framework.chrysopoeia.api.v1.ClaimRevision"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}
-	b.WithName(customResourceDefinitionSource.Name)
-	b.WithNamespace(customResourceDefinitionSource.Namespace)
+	b.WithName(claimRevision.Name)
+	b.WithNamespace(claimRevision.Namespace)
 
-	b.WithKind("CustomResourceDefinitionSource")
-	b.WithAPIVersion("helmetica.io/v1")
+	b.WithKind("ClaimRevision")
+	b.WithAPIVersion("chrysopoeia.helmetica.io/v1")
 	return b, nil
 }
 
-// ExtractCustomResourceDefinitionSource extracts the applied configuration owned by fieldManager from
-// customResourceDefinitionSource. If no managedFields are found in customResourceDefinitionSource for fieldManager, a
-// CustomResourceDefinitionSourceApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// ExtractClaimRevision extracts the applied configuration owned by fieldManager from
+// claimRevision. If no managedFields are found in claimRevision for fieldManager, a
+// ClaimRevisionApplyConfiguration is returned with only the Name, Namespace (if applicable),
 // APIVersion and Kind populated. It is possible that no managed fields were found for because other
 // field managers have taken ownership of all the fields previously owned by fieldManager, or because
 // the fieldManager never owned fields any fields.
-// customResourceDefinitionSource must be a unmodified CustomResourceDefinitionSource API object that was retrieved from the Kubernetes API.
-// ExtractCustomResourceDefinitionSource provides a way to perform a extract/modify-in-place/apply workflow.
+// claimRevision must be a unmodified ClaimRevision API object that was retrieved from the Kubernetes API.
+// ExtractClaimRevision provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractCustomResourceDefinitionSource(customResourceDefinitionSource *apiv1.CustomResourceDefinitionSource, fieldManager string) (*CustomResourceDefinitionSourceApplyConfiguration, error) {
-	return ExtractCustomResourceDefinitionSourceFrom(customResourceDefinitionSource, fieldManager, "")
+func ExtractClaimRevision(claimRevision *apiv1.ClaimRevision, fieldManager string) (*ClaimRevisionApplyConfiguration, error) {
+	return ExtractClaimRevisionFrom(claimRevision, fieldManager, "")
 }
 
-// ExtractCustomResourceDefinitionSourceStatus extracts the applied configuration owned by fieldManager from
-// customResourceDefinitionSource for the status subresource.
-func ExtractCustomResourceDefinitionSourceStatus(customResourceDefinitionSource *apiv1.CustomResourceDefinitionSource, fieldManager string) (*CustomResourceDefinitionSourceApplyConfiguration, error) {
-	return ExtractCustomResourceDefinitionSourceFrom(customResourceDefinitionSource, fieldManager, "status")
+// ExtractClaimRevisionStatus extracts the applied configuration owned by fieldManager from
+// claimRevision for the status subresource.
+func ExtractClaimRevisionStatus(claimRevision *apiv1.ClaimRevision, fieldManager string) (*ClaimRevisionApplyConfiguration, error) {
+	return ExtractClaimRevisionFrom(claimRevision, fieldManager, "status")
 }
 
-func (b CustomResourceDefinitionSourceApplyConfiguration) IsApplyConfiguration() {}
+func (b ClaimRevisionApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kind field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithKind(value string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithKind(value string) *ClaimRevisionApplyConfiguration {
 	b.TypeMetaApplyConfiguration.Kind = &value
 	return b
 }
@@ -87,7 +87,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithKind(value string
 // WithAPIVersion sets the APIVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the APIVersion field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithAPIVersion(value string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithAPIVersion(value string) *ClaimRevisionApplyConfiguration {
 	b.TypeMetaApplyConfiguration.APIVersion = &value
 	return b
 }
@@ -95,7 +95,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithAPIVersion(value 
 // WithName sets the Name field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithName(value string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithName(value string) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Name = &value
 	return b
@@ -104,7 +104,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithName(value string
 // WithGenerateName sets the GenerateName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the GenerateName field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithGenerateName(value string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithGenerateName(value string) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.GenerateName = &value
 	return b
@@ -113,7 +113,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithGenerateName(valu
 // WithNamespace sets the Namespace field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Namespace field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithNamespace(value string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithNamespace(value string) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Namespace = &value
 	return b
@@ -122,7 +122,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithNamespace(value s
 // WithUID sets the UID field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the UID field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithUID(value types.UID) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithUID(value types.UID) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.UID = &value
 	return b
@@ -131,7 +131,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithUID(value types.U
 // WithResourceVersion sets the ResourceVersion field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ResourceVersion field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithResourceVersion(value string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithResourceVersion(value string) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.ResourceVersion = &value
 	return b
@@ -140,7 +140,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithResourceVersion(v
 // WithGeneration sets the Generation field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Generation field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithGeneration(value int64) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithGeneration(value int64) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.Generation = &value
 	return b
@@ -149,7 +149,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithGeneration(value 
 // WithCreationTimestamp sets the CreationTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the CreationTimestamp field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithCreationTimestamp(value apismetav1.Time) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithCreationTimestamp(value apismetav1.Time) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.CreationTimestamp = &value
 	return b
@@ -158,7 +158,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithCreationTimestamp
 // WithDeletionTimestamp sets the DeletionTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionTimestamp field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithDeletionTimestamp(value apismetav1.Time) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithDeletionTimestamp(value apismetav1.Time) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionTimestamp = &value
 	return b
@@ -167,7 +167,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithDeletionTimestamp
 // WithDeletionGracePeriodSeconds sets the DeletionGracePeriodSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionGracePeriodSeconds field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithDeletionGracePeriodSeconds(value int64) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	b.ObjectMetaApplyConfiguration.DeletionGracePeriodSeconds = &value
 	return b
@@ -177,7 +177,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithDeletionGracePeri
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Labels field,
 // overwriting an existing map entries in Labels field with the same key.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithLabels(entries map[string]string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithLabels(entries map[string]string) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Labels == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Labels = make(map[string]string, len(entries))
@@ -192,7 +192,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithLabels(entries ma
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the Annotations field,
 // overwriting an existing map entries in Annotations field with the same key.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithAnnotations(entries map[string]string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithAnnotations(entries map[string]string) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	if b.ObjectMetaApplyConfiguration.Annotations == nil && len(entries) > 0 {
 		b.ObjectMetaApplyConfiguration.Annotations = make(map[string]string, len(entries))
@@ -206,7 +206,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithAnnotations(entri
 // WithOwnerReferences adds the given value to the OwnerReferences field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the OwnerReferences field.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithOwnerReferences(values ...*metav1.OwnerReferenceApplyConfiguration) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithOwnerReferences(values ...*metav1.OwnerReferenceApplyConfiguration) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		if values[i] == nil {
@@ -220,7 +220,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithOwnerReferences(v
 // WithFinalizers adds the given value to the Finalizers field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Finalizers field.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithFinalizers(values ...string) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithFinalizers(values ...string) *ClaimRevisionApplyConfiguration {
 	b.ensureObjectMetaApplyConfigurationExists()
 	for i := range values {
 		b.ObjectMetaApplyConfiguration.Finalizers = append(b.ObjectMetaApplyConfiguration.Finalizers, values[i])
@@ -228,7 +228,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithFinalizers(values
 	return b
 }
 
-func (b *CustomResourceDefinitionSourceApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
+func (b *ClaimRevisionApplyConfiguration) ensureObjectMetaApplyConfigurationExists() {
 	if b.ObjectMetaApplyConfiguration == nil {
 		b.ObjectMetaApplyConfiguration = &metav1.ObjectMetaApplyConfiguration{}
 	}
@@ -237,7 +237,7 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) ensureObjectMetaApply
 // WithSpec sets the Spec field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Spec field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithSpec(value *CustomResourceDefinitionSourceSpecApplyConfiguration) *CustomResourceDefinitionSourceApplyConfiguration {
+func (b *ClaimRevisionApplyConfiguration) WithSpec(value *ClaimRevisionSpecApplyConfiguration) *ClaimRevisionApplyConfiguration {
 	b.Spec = value
 	return b
 }
@@ -245,29 +245,29 @@ func (b *CustomResourceDefinitionSourceApplyConfiguration) WithSpec(value *Custo
 // WithStatus sets the Status field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Status field is set to the value of the last call.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) WithStatus(value *CustomResourceDefinitionSourceStatusApplyConfiguration) *CustomResourceDefinitionSourceApplyConfiguration {
-	b.Status = value
+func (b *ClaimRevisionApplyConfiguration) WithStatus(value apiv1.ClaimRevisionStatus) *ClaimRevisionApplyConfiguration {
+	b.Status = &value
 	return b
 }
 
 // GetKind retrieves the value of the Kind field in the declarative configuration.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) GetKind() *string {
+func (b *ClaimRevisionApplyConfiguration) GetKind() *string {
 	return b.TypeMetaApplyConfiguration.Kind
 }
 
 // GetAPIVersion retrieves the value of the APIVersion field in the declarative configuration.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) GetAPIVersion() *string {
+func (b *ClaimRevisionApplyConfiguration) GetAPIVersion() *string {
 	return b.TypeMetaApplyConfiguration.APIVersion
 }
 
 // GetName retrieves the value of the Name field in the declarative configuration.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) GetName() *string {
+func (b *ClaimRevisionApplyConfiguration) GetName() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Name
 }
 
 // GetNamespace retrieves the value of the Namespace field in the declarative configuration.
-func (b *CustomResourceDefinitionSourceApplyConfiguration) GetNamespace() *string {
+func (b *ClaimRevisionApplyConfiguration) GetNamespace() *string {
 	b.ensureObjectMetaApplyConfigurationExists()
 	return b.ObjectMetaApplyConfiguration.Namespace
 }
