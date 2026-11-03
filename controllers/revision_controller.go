@@ -248,13 +248,11 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 		values["__platform__"] = pv
 	}
 	values["__claim__"] = map[string]any{
-		"apiVersion":  claim.GetAPIVersion(),
-		"kind":        claim.GetKind(),
-		"name":        claim.GetName(),
-		"namespace":   claim.GetNamespace(),
-		"uid":         string(claim.GetUID()),
-		"labels":      claim.GetLabels(),
-		"annotations": claim.GetAnnotations(),
+		"apiVersion": claim.GetAPIVersion(),
+		"kind":       claim.GetKind(),
+		"name":       claim.GetName(),
+		"namespace":  claim.GetNamespace(),
+		"uid":        string(claim.GetUID()),
 	}
 
 	ociRepo, err := r.ensureOCIRepository(ctx, claim, ociUrl, version)
