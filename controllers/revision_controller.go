@@ -380,7 +380,7 @@ func (r *RevisionManager) SetupDynamicControllerWithWatches(dynCtrl controller.T
 	if err := dynCtrl.Watch(source.TypedKind(mgr.GetCache(), &corev1.ConfigMap{}, handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, cm *corev1.ConfigMap) []reconcile.Request {
 		l := log.FromContext(ctx).WithName("SetupDynamicControllerWithWatches.mapPlatformValueChangeToAll")
 		if _, ok := cm.Annotations[platformValuesAnnotation]; ok && cm.Namespace == r.PlatformValuesNamespace {
-			tl, err := target.ToList()
+			tl, err := target.DeepCopy().ToList()
 			if err != nil {
 				l.Error(err, "Failed to create unstructured list")
 				return nil
