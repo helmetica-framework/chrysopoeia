@@ -252,7 +252,7 @@ func (r *RevisionManager) Reconcile(ctx context.Context, req reconcile.Request) 
 		"kind":        claim.GetKind(),
 		"name":        claim.GetName(),
 		"namespace":   claim.GetNamespace(),
-		"uid":         claim.GetUID(),
+		"uid":         string(claim.GetUID()),
 		"labels":      claim.GetLabels(),
 		"annotations": claim.GetAnnotations(),
 	}
