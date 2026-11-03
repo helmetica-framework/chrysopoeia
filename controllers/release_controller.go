@@ -75,7 +75,7 @@ func (r *ReleaseController) Reconcile(ctx context.Context, req reconcile.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if !claim.GetDeletionTimestamp().IsZero() {
-		done, err := r.cleanupRelease(ctx, instanceNSName)
+		done, err := r.cleanupRelease(ctx, instanceNSName, claim.GetName())
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -198,8 +198,22 @@ func (r *ReleaseController) instanceNamespaceName(nsn types.NamespacedName) stri
 	return fmt.Sprintf("helx-%s-%x-%s", kind, gvkh.Sum(nil)[:4], idHex)
 }
 
-func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName string) (done bool, err error) {
-	log.FromContext(ctx).WithName("cleanupRelease").Info("Cleaning up release", "namespace", helmNSName)
+func (r *ReleaseController) cleanupRelease(ctx context.Context, helmNSName, claimName string) (done bool, err error) {
+	l := log.FromContext(ctx).WithName("cleanupRelease")
+	l.Info("Cleaning up release", "namespace", helmNSName)
+
+	// The HelmRelease has to go first. Flux uninstalls the chart with the RBAC in the namespace, and
+	// the operator needs its harness until the uninstall is done.
+	hr := &helmv2.HelmRelease{}
+	hr.SetNamespace(helmNSName)
+	hr.SetName(claimName)
+
+	if err := r.Delete(ctx, hr); err == nil {
+		l.Info("Waiting for the HelmRelease to be uninstalled", "namespace", helmNSName, "name", claimName)
+		return false, nil
+	} else if !apierrors.IsNotFound(err) {
+		return false, fmt.Errorf("unable to delete the HelmRelease %s/%s: %w", helmNSName, claimName, err)
+	}
 
 	var nsDelDOne, harnessDelDone bool
 
