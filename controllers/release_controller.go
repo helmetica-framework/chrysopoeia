@@ -54,7 +54,7 @@ type ReleaseController struct {
 //+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=dependencygroups,verbs=get;list;watch
 //+kubebuilder:rbac:groups=chrysopoeia.helmetica.io,resources=operatorharnesses,verbs=get;list;watch;create;update;patch;delete;deletecollection
 
-//+kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update;patch;create
+//+kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch;update;patch;create;delete
 
 const InstanceCleanupFinalizer = "chrysopoeia.io/instance-cleanup"
 
