@@ -20,3 +20,5 @@ resources:
 - metrics_auth_role.yaml
 - metrics_auth_role_binding.yaml
 - metrics_reader_role.yaml
+# Users should be able to view claimrevisions, so we aggregate the view role to include our claimrevision-view role.
+- claimrevision_view_aggregate_roles.yaml
