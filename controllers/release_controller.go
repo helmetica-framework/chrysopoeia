@@ -275,12 +275,13 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return fmt.Errorf("unable to ensure the OperatorHarness: %w", err)
 	}
 
-	// The scope labels name dependency groups, the RBAC below needs the CRDs they bundle.
-	providedCRDs, err := r.resolveGroupCRDs(ctx, provides)
+	// Only one bundle can provide (install) a certain CRD, so we need to resolve the CRDs of all providing groups to grant access to them.
+	providedCRDs, err := r.resolveGroupCRDs(ctx, provides, true)
 	if err != nil {
-		return fmt.Errorf("unable to resolve provided dependency groups: %w", err)
+		return fmt.Errorf("unable to resolve providing dependency groups: %w", err)
 	}
-	requiredCRDs, err := r.resolveGroupCRDs(ctx, requires)
+	// Requires does not need protection, the instance only needs to be able to deploy instances of those CRDs, which are protected by a dependency Harness.
+	requiredCRDs, err := r.resolveGroupCRDs(ctx, requires, false)
 	if err != nil {
 		return fmt.Errorf("unable to resolve required dependency groups: %w", err)
 	}
@@ -724,16 +725,17 @@ func (r *ReleaseController) ensureOperatorHarness(
 }
 
 // resolveGroupCRDs returns the names of the CRDs bundled by the referenced DependencyGroups.
-// A group that is not accepted is an error: its claim on the CRDs is disputed, so granting access to
-// them could hand out resources another group owns.
-func (r *ReleaseController) resolveGroupCRDs(ctx context.Context, refs []chrysopoeiav1.DependencyGroupReference) ([]string, error) {
+// Not all groups need to be accepted, only those of providers, CRDs are singletons and can't be installed by multiple bundles.
+// For requires this does not matter, the instance only needs to be able to deploy instances of those CRDs, which are protected by a dependency Harness.
+// For manages, the operator is scoped to the label of the group, so it can only see the instances that requested that scope.
+func (r *ReleaseController) resolveGroupCRDs(ctx context.Context, refs []chrysopoeiav1.DependencyGroupReference, isProvider bool) ([]string, error) {
 	var crds []string
 	for _, ref := range refs {
 		var group chrysopoeiav1.DependencyGroup
 		if err := r.Get(ctx, client.ObjectKey{Name: ref.Name}, &group); err != nil {
 			return nil, fmt.Errorf("unable to get DependencyGroup %q: %w", ref.Name, err)
 		}
-		if group.Status.State != chrysopoeiav1.DependencyGroupAccepted {
+		if isProvider && group.Status.State != chrysopoeiav1.DependencyGroupAccepted {
 			return nil, fmt.Errorf("DependencyGroup %q is not accepted, its state is %q", ref.Name, group.Status.State)
 		}
 		for _, crd := range group.Spec.CRDs {
