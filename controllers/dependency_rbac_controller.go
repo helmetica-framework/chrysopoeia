@@ -168,6 +168,7 @@ func mapToManagedNamespace(c client.Reader) handler.MapFunc {
 		nsKey := types.NamespacedName{Name: obj.GetNamespace()}
 		var ns corev1.Namespace
 		if err := c.Get(ctx, nsKey, &ns); err != nil {
+			log.FromContext(ctx).WithName("mapToManagedNamespace").Error(err, "failed to get namespace")
 			return nil
 		} else if _, ok := ns.Labels["chrysopoeia.io/managed"]; !ok {
 			return nil
