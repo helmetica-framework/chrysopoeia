@@ -165,7 +165,7 @@ func (r *DependencyRBACManager) SetupWithManager(name string, mgr ctrl.Manager) 
 // mapToManagedNamespace returns a reconcile request for the objects namespace if the object namespace has the "chrysopoeia.io/managed" label
 func mapToManagedNamespace(c client.Reader) handler.MapFunc {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {
-		nsKey := types.NamespacedName{Name: obj.GetName()}
+		nsKey := types.NamespacedName{Name: obj.GetNamespace()}
 		var ns corev1.Namespace
 		if err := c.Get(ctx, nsKey, &ns); err != nil {
 			return nil
