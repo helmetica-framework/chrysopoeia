@@ -16,6 +16,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	imagereflectorv1 "github.com/fluxcd/image-reflector-controller/api/v1"
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -124,7 +126,7 @@ func (r *ClaimDefinitionManager) Reconcile(ctx context.Context, req reconcile.Re
 		return ctrl.Result{}, nil
 	}
 
-	chartURL := ociRepo.Status.Artifact.URL
+	chartURL := ptr.Deref(ociRepo.Status.Artifact, fluxmeta.Artifact{}).URL
 	if chartURL == "" {
 		l.Info("OCIRepository does not have an artifact URL")
 		statusCondition.Reason = "OCIRepositoryNoArtifactURL"
