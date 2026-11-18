@@ -1,0 +1,9 @@
+apiVersion: homunculus.helmetica.io/v1
+kind: Test
+metadata:
+  labels:
+    app.kubernetes.io/name: testcontroller
+    app.kubernetes.io/managed-by: kustomize
+  name: test-sample
+spec:
+  # TODO(user): Add fields here

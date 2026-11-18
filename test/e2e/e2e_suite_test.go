@@ -28,6 +28,8 @@ type E2ESuite struct {
 	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
 	isCertManagerAlreadyInstalled        bool
 	isPrometheusOperatorAlreadyInstalled bool
+
+	ociRegistryPort int
 }
 
 func (suite *E2ESuite) SetupSuite() {
@@ -48,6 +50,12 @@ func (suite *E2ESuite) SetupSuite() {
 
 	suite.T().Log("Building and uploading manager image to kind cluster...")
 	buildAndUploadManagerImage(suite.T(), suite.projectDir, suite.buildDir)
+
+	suite.T().Log("Building and uploading test controller image to kind cluster...")
+	buildAndUploadTestControllerImage(suite.T(), suite.projectDir, suite.buildDir)
+
+	suite.T().Log("Installing OCI registry...")
+	suite.ociRegistryPort = installOCIRegistry(suite.T(), suite.projectDir)
 
 	suite.T().Log("Installing controller manager...")
 	installControllerManager(suite.T(), suite.projectDir, suite.buildDir)
