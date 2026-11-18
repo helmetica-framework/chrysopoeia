@@ -1,0 +1,16 @@
+apiVersion: v1.validations.helmetica-bundles.io/bundle
+kind: Instance
+metadata:
+  name: valid
+spec:
+  values:
+    database:
+      replicas: 2
+      mode: Auto
+    endpoints:
+      - name: api
+    tag: "1.0.0"
+    labels:
+      app.name: demo
+    settings:
+      name: demo
