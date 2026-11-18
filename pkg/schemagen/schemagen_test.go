@@ -150,6 +150,45 @@ func TestGenerateCRD_StatusConditions(t *testing.T) {
 		"everything metav1.Condition marks required, and only that")
 }
 
+func TestGenerateCRD_HintValidations(t *testing.T) {
+	crd := generatedCRD(t, "validations")
+	values := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["values"]
+
+	database := values.Properties["database"]
+	require.Len(t, database.XValidations, 1, "the rule on the object lands on the object")
+	assert.Equal(t, "self.mode != 'Manual' || has(self.replicas)", database.XValidations[0].Rule)
+	assert.Equal(t, "replicas is required when mode is Manual", database.XValidations[0].Message)
+	assert.Equal(t, ".replicas", database.XValidations[0].FieldPath)
+
+	replicas := database.Properties["replicas"]
+	require.Len(t, replicas.XValidations, 1)
+	require.NotNil(t, replicas.XValidations[0].Reason)
+	assert.Equal(t, apiextv1.FieldValueInvalid, *replicas.XValidations[0].Reason)
+
+	mode := database.Properties["mode"]
+	require.Len(t, mode.XValidations, 1)
+	assert.Equal(t, "'mode must be Auto or Manual, got ' + self", mode.XValidations[0].MessageExpression)
+
+	endpoints := values.Properties["endpoints"]
+	require.Len(t, endpoints.XValidations, 1, "the rule on the array lands on the array")
+	assert.Equal(t, "self.all(e, e.name != '')", endpoints.XValidations[0].Rule)
+
+	labels := values.Properties["labels"]
+	require.Len(t, labels.XValidations, 1, "the rule on the map lands on the map")
+
+	settings := values.Properties["settings"]
+	require.Len(t, settings.XValidations, 1, "the rule on the properties hint lands on the object")
+
+	tag := values.Properties["tag"]
+	require.Len(t, tag.XValidations, 1)
+	require.NotNil(t, tag.XValidations[0].OptionalOldSelf)
+	assert.True(t, *tag.XValidations[0].OptionalOldSelf)
+
+	assert.Empty(t, values.Properties["plain"].XValidations, "a field without a hint carries no rule")
+	_, exported := values.Properties["computed"]
+	assert.False(t, exported, "a rule on a computed field is dropped with the field")
+}
+
 // TestGeneratedCRD_KeepsAVersionWrittenToStatus covers what the golden files
 // cannot: a property missing from the schema is pruned by the API server on
 // write, with no error for the writer to see. The client here is deliberately
