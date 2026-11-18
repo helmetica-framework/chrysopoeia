@@ -46,3 +46,76 @@ func Test_Unmarshal_InvalidHint(t *testing.T) {
 	err := json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler()))
 	require.Error(t, err)
 }
+
+func Test_Unmarshal_ValidationHint(t *testing.T) {
+	raw := []byte(`{
+		"#foo": {
+			"validation": [
+				{
+					"rule": "!oldSelf.hasValue() || self == oldSelf.value()",
+					"message": "immutable",
+					"message_expression": "'got ' + self",
+					"reason": "FieldValueForbidden",
+					"field_path": ".bar",
+					"optional_old_self": true
+				}
+			]
+		}
+	}`)
+
+	var v any
+	require.NoError(t, json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler())))
+
+	obj, ok := v.(ObjWithHints)
+	require.True(t, ok)
+	require.NotNil(t, obj["foo"].Hint)
+	require.Len(t, obj["foo"].Hint.Validation, 1)
+
+	rule := obj["foo"].Hint.Validation[0]
+	assert.Equal(t, "!oldSelf.hasValue() || self == oldSelf.value()", rule.Rule)
+	assert.Equal(t, "immutable", rule.Message)
+	assert.Equal(t, "'got ' + self", rule.MessageExpression)
+	assert.Equal(t, "FieldValueForbidden", rule.Reason)
+	assert.Equal(t, ".bar", rule.FieldPath)
+	require.NotNil(t, rule.OptionalOldSelf)
+	assert.True(t, *rule.OptionalOldSelf)
+}
+
+func Test_Unmarshal_ValidationHint_RequiresRule(t *testing.T) {
+	raw := []byte(`{"#foo": {"validation": [{"message": "no rule"}]}}`)
+
+	var v any
+	err := json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler()))
+	require.ErrorContains(t, err, "validation[0]: rule must not be empty")
+}
+
+func Test_Unmarshal_ValidationHint_AcceptsKnownReasons(t *testing.T) {
+	for _, reason := range []string{
+		"FieldValueInvalid",
+		"FieldValueForbidden",
+		"FieldValueRequired",
+		"FieldValueDuplicate",
+	} {
+		t.Run(reason, func(t *testing.T) {
+			raw := []byte(fmt.Sprintf(`{"#foo": {"validation": [{"rule": "self > 0", "reason": %q}]}}`, reason))
+
+			var v any
+			require.NoError(t, json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler())))
+		})
+	}
+}
+
+func Test_Unmarshal_ValidationHint_RejectsUnknownReason(t *testing.T) {
+	raw := []byte(`{"#foo": {"validation": [{"rule": "self > 0", "reason": "Bogus"}]}}`)
+
+	var v any
+	err := json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler()))
+	require.ErrorContains(t, err, `validation[0]: invalid reason "Bogus"`)
+}
+
+func Test_Unmarshal_ValidationHint_ReasonIsOptional(t *testing.T) {
+	raw := []byte(`{"#foo": {"validation": [{"rule": "self > 0"}]}}`)
+
+	var v any
+	require.NoError(t, json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler())))
+}

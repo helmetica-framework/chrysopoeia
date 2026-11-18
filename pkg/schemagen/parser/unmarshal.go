@@ -22,9 +22,28 @@ type Hint struct {
 	Properties any `json:"properties,omitempty"`
 
 	Export *bool `json:"export,omitempty"`
+
+	Validation []Validation `json:"validation,omitempty"`
+}
+
+// Validation models one entry of an `x-kubernetes-validations` list.
+type Validation struct {
+	Rule              string `json:"rule,omitempty"`
+	Message           string `json:"message,omitempty"`
+	MessageExpression string `json:"message_expression,omitempty"`
+	Reason            string `json:"reason,omitempty"`
+	FieldPath         string `json:"field_path,omitempty"`
+	OptionalOldSelf   *bool  `json:"optional_old_self,omitempty"`
 }
 
 var validTypes = sets.New("boolean", "integer", "number", "string")
+
+var validReasons = sets.New(
+	"FieldValueInvalid",
+	"FieldValueForbidden",
+	"FieldValueRequired",
+	"FieldValueDuplicate",
+)
 
 // UnmarshalJSONFrom unmarshals a Hint from a jsontext.Decoder.
 // It expects the JSON to be an object, and will return an error if it is not.
@@ -40,6 +59,14 @@ func (h *Hint) UnmarshalJSONFrom(d *jsontext.Decoder) error {
 	}
 	if len(th.Enum) > 0 && (th.Items != nil || th.Properties != nil) {
 		return fmt.Errorf("hint cannot have both enum and items/properties")
+	}
+	for i, v := range th.Validation {
+		if v.Rule == "" {
+			return fmt.Errorf("validation[%d]: rule must not be empty", i)
+		}
+		if v.Reason != "" && !validReasons.Has(v.Reason) {
+			return fmt.Errorf("validation[%d]: invalid reason %q", i, v.Reason)
+		}
 	}
 	*h = Hint(th)
 	return nil
