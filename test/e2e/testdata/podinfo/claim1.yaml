@@ -1,0 +1,5 @@
+apiVersion: v0.podinfo.helmetica-bundles.io/bundle
+kind: PodInfo
+metadata:
+  name: claim1
+spec: {}

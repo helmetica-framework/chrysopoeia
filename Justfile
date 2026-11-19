@@ -76,3 +76,22 @@ clean:
 # Run a controller from your host.
 run: manifests generate fmt vet
     go run ./hack/makerun
+
+KIND := "go tool sigs.k8s.io/kind"
+KIND_CLUSTER := "chrysopoeia-test-e2e"
+
+setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
+    @case "$({{KIND}} get clusters)" in \
+        *{{KIND_CLUSTER}}*) \
+            echo "Kind cluster '{{KIND_CLUSTER}}' already exists. Skipping creation." ;; \
+        *) \
+            echo "Creating Kind cluster '{{KIND_CLUSTER}}'..."; \
+            {{KIND}} create cluster --name {{KIND_CLUSTER}} ;; \
+    esac
+
+test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
+    KIND="{{KIND}}" KIND_CLUSTER={{KIND_CLUSTER}} go test -v -tags=e2e ./test/e2e/...
+    just cleanup-test-e2e
+
+cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
+    {{KIND}} delete cluster --name {{KIND_CLUSTER}}
