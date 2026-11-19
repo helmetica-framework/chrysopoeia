@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/shlex"
@@ -245,6 +247,22 @@ func buildAndUploadManagerImage(t *testing.T, projectDir, buildDir string) {
 	requireLoadImageToKindClusterWithName(t, projectImage)
 }
 
+func buildAndUploadTestControllerImage(t *testing.T, projectDir, buildDir string) {
+	t.Helper()
+
+	const testControllerPath = "./test/e2e/testdata/testcontroller"
+	const testControllerImage = "local.dev/testcontroller:latest"
+
+	buildCmd := exec.Command("go", "build", "-o", path.Join(buildDir, "testcontroller"), "./cmd")
+	buildCmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux")
+	buildCmd.Dir = path.Join(projectDir, testControllerPath)
+	requireRun(t, buildCmd)
+	imageBuildCmd := exec.Command("docker", "build", "-f", path.Join(projectDir, testControllerPath, "Dockerfile"), "-t", testControllerImage, buildDir)
+	requireRun(t, imageBuildCmd)
+
+	requireLoadImageToKindClusterWithName(t, testControllerImage)
+}
+
 func installControllerManager(t *testing.T, projectDir, tmpDir string) {
 	t.Helper()
 
@@ -302,4 +320,41 @@ func installControllerManager(t *testing.T, projectDir, tmpDir string) {
 	t.Log("Installing flux...")
 
 	requireRun(t, exec.Command("kubectl", "apply", "-k", path.Join(projectDir, "config", "flux")))
+}
+
+func installOCIRegistry(t *testing.T, projectDir string) int {
+	t.Helper()
+
+	requireRun(t, exec.Command("kubectl", "apply", "-f", path.Join(projectDir, "test/e2e/testdata/oci-registry.yaml")))
+	requireDeploymentAvailable(t, "oci-registry-system", "registry")
+
+	fwdPort, err := freePort()
+	require.NoError(t, err)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		cmd := exec.CommandContext(t.Context(), "kubectl", "port-forward", "-n", "oci-registry-system", "svc/registry", fmt.Sprintf("%d:5000", fwdPort))
+		t.Log("Executing command:", fmt.Sprintf("(PWD=%s)", cmd.Dir), strings.Join(cmd.Args, " "))
+
+		// Run the command and log any errors, but don't fail the test if it is killed due to test finished.
+		if err := cmd.Run(); err != nil && t.Context().Err() == nil {
+			t.Errorf("Error occurred while running command %v: %v", cmd.Args, err)
+		}
+	})
+	t.Cleanup(wg.Wait)
+
+	return fwdPort
+}
+
+// freePort returns a free port on the host.
+func freePort() (int, error) {
+	a, err := net.ResolveTCPAddr("tcp", ":0")
+	if err != nil {
+		return 0, err
+	}
+	l, err := net.ListenTCP("tcp", a)
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
 }

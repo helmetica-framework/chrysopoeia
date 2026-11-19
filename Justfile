@@ -38,7 +38,7 @@ binary:
 
 # Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 manifests:
-    go tool sigs.k8s.io/controller-tools/cmd/controller-gen rbac:roleName=manager-role crd:generateEmbeddedObjectMeta=true applyconfiguration webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+    go tool sigs.k8s.io/controller-tools/cmd/controller-gen rbac:roleName=manager-role crd:generateEmbeddedObjectMeta=true applyconfiguration webhook paths="./api/..." paths="./controllers/..." output:crd:artifacts:config=config/crd/bases
 
 # Generate documentation
 docs:
@@ -47,7 +47,7 @@ docs:
 # Generate manifests e.g. CRD, RBAC etc.
 generate:
     go generate ./...
-    go tool sigs.k8s.io/controller-tools/cmd/controller-gen object paths="./..."
+    go tool sigs.k8s.io/controller-tools/cmd/controller-gen object paths="./api/..." paths="./controllers/..."
 
 # Run go fmt against code
 fmt:
@@ -91,7 +91,7 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
     KIND="{{KIND}}" KIND_CLUSTER={{KIND_CLUSTER}} go test -v -tags=e2e ./test/e2e/...
-    just cleanup-test-e2e
+#     just cleanup-test-e2e
 
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
     {{KIND}} delete cluster --name {{KIND_CLUSTER}}

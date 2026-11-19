@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - homunculus.helmetica.io
+  resources:
+  - tests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - homunculus.helmetica.io
+  resources:
+  - tests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - homunculus.helmetica.io
+  resources:
+  - tests/status
+  verbs:
+  - get
+  - patch
+  - update
