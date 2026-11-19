@@ -10,7 +10,7 @@ import (
 )
 
 // Hint represents a hint for a value in the schema.
-// It can be used to provide additional information about the value, such as its description, type, and whether it should be exported.
+// It can provide a description, a type, bounds, an export flag, and validation rules.
 type Hint struct {
 	Description string `json:"description,omitempty"`
 
@@ -22,6 +22,10 @@ type Hint struct {
 	Properties any `json:"properties,omitempty"`
 
 	Export *bool `json:"export,omitempty"`
+
+	MaxLength     *int64 `json:"max_length,omitempty"`
+	MaxItems      *int64 `json:"max_items,omitempty"`
+	MaxProperties *int64 `json:"max_properties,omitempty"`
 
 	Validation []Validation `json:"validation,omitempty"`
 }
@@ -59,6 +63,15 @@ func (h *Hint) UnmarshalJSONFrom(d *jsontext.Decoder) error {
 	}
 	if len(th.Enum) > 0 && (th.Items != nil || th.Properties != nil) {
 		return fmt.Errorf("hint cannot have both enum and items/properties")
+	}
+	if th.MaxLength != nil && *th.MaxLength < 0 {
+		return fmt.Errorf("max_length must not be negative: %d", *th.MaxLength)
+	}
+	if th.MaxItems != nil && *th.MaxItems < 0 {
+		return fmt.Errorf("max_items must not be negative: %d", *th.MaxItems)
+	}
+	if th.MaxProperties != nil && *th.MaxProperties < 0 {
+		return fmt.Errorf("max_properties must not be negative: %d", *th.MaxProperties)
 	}
 	for i, v := range th.Validation {
 		if v.Rule == "" {

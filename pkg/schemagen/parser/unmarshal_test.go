@@ -119,3 +119,41 @@ func Test_Unmarshal_ValidationHint_ReasonIsOptional(t *testing.T) {
 	var v any
 	require.NoError(t, json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler())))
 }
+
+func Test_Unmarshal_BoundsHints(t *testing.T) {
+	raw := []byte(`{
+		"#foo": {
+			"max_length": 63,
+			"max_items": 5,
+			"max_properties": 10
+		}
+	}`)
+
+	var v any
+	require.NoError(t, json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler())))
+
+	obj, ok := v.(ObjWithHints)
+	require.True(t, ok)
+	require.NotNil(t, obj["foo"].Hint)
+
+	require.NotNil(t, obj["foo"].Hint.MaxLength)
+	assert.Equal(t, int64(63), *obj["foo"].Hint.MaxLength)
+	require.NotNil(t, obj["foo"].Hint.MaxItems)
+	assert.Equal(t, int64(5), *obj["foo"].Hint.MaxItems)
+	require.NotNil(t, obj["foo"].Hint.MaxProperties)
+	assert.Equal(t, int64(10), *obj["foo"].Hint.MaxProperties)
+}
+
+func Test_Unmarshal_BoundsHints_RejectNegative(t *testing.T) {
+	for name, raw := range map[string][]byte{
+		"max_length":     []byte(`{"#foo": {"max_length": -1}}`),
+		"max_items":      []byte(`{"#foo": {"max_items": -1}}`),
+		"max_properties": []byte(`{"#foo": {"max_properties": -1}}`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var v any
+			err := json.Unmarshal(raw, &v, json.WithUnmarshalers(HintsUnmarshaler()))
+			require.ErrorContains(t, err, name+" must not be negative")
+		})
+	}
+}

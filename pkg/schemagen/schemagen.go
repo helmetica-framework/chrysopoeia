@@ -41,6 +41,7 @@ var crdCategories = []string{"all", "claim", "helmetica"}
 // Untagged null values are skipped. Empty objects and arrays are skipped unless they have hints that specify their type.
 // You can use hints in the values.yaml to specify the type of a value, to mark it as exported or
 // not exported, or to add a validation rule.
+// Bounds are max_length on a string, max_items on an array, and max_properties on a map.
 // Hints are specified as a sibling key with a '#' prefix, e.g.:
 //
 //	foo:
@@ -94,6 +95,14 @@ var crdCategories = []string{"all", "claim", "helmetica"}
 //	  validation:
 //	    - rule: "self.mode == 'Auto' || has(self.replicas)"
 //	      message: "replicas is required when mode is Manual"
+//
+//	# Bounds keep a CEL rule within the cost budget.
+//	tag: "1.0.0"
+//	'#tag':
+//	  max_length: 63
+//	  validation:
+//	    - rule: "self == oldSelf"
+//	      message: "tag is immutable"
 func GenerateCRD(chart chartv2.Chart, opts ...GenerateOption) (apiextv1.CustomResourceDefinition, error) {
 	o := &generateOptions{}
 	for _, opt := range opts {
@@ -354,6 +363,14 @@ func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hint
 			return convertJSONNodeToJSONSchema(nil, ptr.Deref(v.Hint, parser.Hint{}), append(path, "#"), hints)
 		}
 
+		kind := "object"
+		if hint.Items != nil {
+			kind = "map"
+		}
+		if err := checkBounds(hint, kind, path); err != nil {
+			return nil, err
+		}
+
 		if p := hint.Items; p != nil {
 			lastPathElement, path := pop(path)
 			rawPropsFoundAt := append(path, "#"+lastPathElement, "items")
@@ -368,7 +385,8 @@ func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hint
 				AdditionalProperties: &apiextv1.JSONSchemaPropsOrBool{
 					Schema: pj,
 				},
-				XValidations: validationsFromHint(hint.Validation),
+				MaxProperties: hint.MaxProperties,
+				XValidations:  validationsFromHint(hint.Validation),
 			}, nil
 		} else if p := hint.Properties; p != nil {
 			lastPathElement, path := pop(path)
@@ -411,6 +429,10 @@ func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hint
 		}
 
 	case []any:
+		if err := checkBounds(hint, "array", path); err != nil {
+			return nil, err
+		}
+
 		var items *apiextv1.JSONSchemaProps
 
 		var rawItems any
@@ -442,6 +464,7 @@ func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hint
 				Items: &apiextv1.JSONSchemaPropsOrArray{
 					Schema: items,
 				},
+				MaxItems:     hint.MaxItems,
 				XValidations: validationsFromHint(hint.Validation),
 			}, nil
 		}
@@ -460,6 +483,10 @@ func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hint
 			return nil, nil
 		}
 
+		if err := checkBounds(hint, typ, path); err != nil {
+			return nil, err
+		}
+
 		enums := make([]apiextv1.JSON, len(hint.Enum))
 		for i, e := range hint.Enum {
 			ej, err := json.Marshal(e)
@@ -473,6 +500,7 @@ func convertJSONNodeToJSONSchema(node any, hint parser.Hint, path []string, hint
 			Description:  hint.Description,
 			Type:         typ,
 			Enum:         enums,
+			MaxLength:    hint.MaxLength,
 			XValidations: validationsFromHint(hint.Validation),
 		}, nil
 	}
@@ -641,4 +669,19 @@ func validationsFromHint(vs []parser.Validation) apiextv1.ValidationRules {
 	}
 
 	return vr
+}
+
+// checkBounds rejects a bound that does not fit the node kind.
+// kind is "string", "array", "map", or the primitive type, such as "integer".
+func checkBounds(hint parser.Hint, kind string, path []string) error {
+	if hint.MaxLength != nil && kind != "string" {
+		return fmt.Errorf("max_length is only allowed on a string at path %q", jsonpointer(path))
+	}
+	if hint.MaxItems != nil && kind != "array" {
+		return fmt.Errorf("max_items is only allowed on an array at path %q", jsonpointer(path))
+	}
+	if hint.MaxProperties != nil && kind != "map" {
+		return fmt.Errorf("max_properties is only allowed on a map at path %q", jsonpointer(path))
+	}
+	return nil
 }

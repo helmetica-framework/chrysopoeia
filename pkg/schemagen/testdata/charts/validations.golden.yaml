@@ -150,6 +150,7 @@ spec:
                         name:
                           type: string
                       type: object
+                    maxItems: 5
                     type: array
                     x-kubernetes-validations:
                     - message: every endpoint needs a name
@@ -158,6 +159,7 @@ spec:
                     additionalProperties:
                       type: string
                     description: The label set.
+                    maxProperties: 10
                     type: object
                     x-kubernetes-validations:
                     - message: every label key must start with app.
@@ -176,6 +178,7 @@ spec:
                       rule: has(self.name)
                   tag:
                     description: The pinned image tag. It cannot change after creation.
+                    maxLength: 63
                     type: string
                     x-kubernetes-validations:
                     - message: tag is immutable
