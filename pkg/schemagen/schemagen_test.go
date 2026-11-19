@@ -150,6 +150,102 @@ func TestGenerateCRD_StatusConditions(t *testing.T) {
 		"everything metav1.Condition marks required, and only that")
 }
 
+func TestGenerateCRD_HintValidations(t *testing.T) {
+	crd := generatedCRD(t, "validations")
+	values := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["values"]
+
+	database := values.Properties["database"]
+	require.Len(t, database.XValidations, 1, "the rule on the object lands on the object")
+	assert.Equal(t, "self.mode != 'Manual' || has(self.replicas)", database.XValidations[0].Rule)
+	assert.Equal(t, "replicas is required when mode is Manual", database.XValidations[0].Message)
+	assert.Equal(t, ".replicas", database.XValidations[0].FieldPath)
+
+	replicas := database.Properties["replicas"]
+	require.Len(t, replicas.XValidations, 1)
+	require.NotNil(t, replicas.XValidations[0].Reason)
+	assert.Equal(t, apiextv1.FieldValueInvalid, *replicas.XValidations[0].Reason)
+
+	mode := database.Properties["mode"]
+	require.Len(t, mode.XValidations, 1)
+	assert.Equal(t, "'mode must be Auto or Manual, got ' + self", mode.XValidations[0].MessageExpression)
+
+	endpoints := values.Properties["endpoints"]
+	require.Len(t, endpoints.XValidations, 1, "the rule on the array lands on the array")
+	assert.Equal(t, "self.all(e, e.name != '')", endpoints.XValidations[0].Rule)
+	require.NotNil(t, endpoints.MaxItems)
+	assert.Equal(t, int64(5), *endpoints.MaxItems)
+
+	labels := values.Properties["labels"]
+	require.Len(t, labels.XValidations, 1, "the rule on the map lands on the map")
+	require.NotNil(t, labels.MaxProperties)
+	assert.Equal(t, int64(10), *labels.MaxProperties)
+
+	settings := values.Properties["settings"]
+	require.Len(t, settings.XValidations, 1, "the rule on the properties hint lands on the object")
+
+	tag := values.Properties["tag"]
+	require.Len(t, tag.XValidations, 1)
+	require.NotNil(t, tag.XValidations[0].OptionalOldSelf)
+	assert.True(t, *tag.XValidations[0].OptionalOldSelf)
+	require.NotNil(t, tag.MaxLength)
+	assert.Equal(t, int64(63), *tag.MaxLength)
+
+	assert.Empty(t, values.Properties["plain"].XValidations, "a field without a hint carries no rule")
+	assert.Nil(t, values.Properties["plain"].MaxLength, "a field without a hint has no max_length")
+	assert.Nil(t, values.Properties["plain"].MaxItems, "a field without a hint has no max_items")
+	assert.Nil(t, values.Properties["plain"].MaxProperties, "a field without a hint has no max_properties")
+	_, exported := values.Properties["computed"]
+	assert.False(t, exported, "a rule on a computed field is dropped with the field")
+}
+
+func TestGenerateCRD_BoundsOnWrongType(t *testing.T) {
+	tests := map[string]struct {
+		values  string
+		wantErr string
+	}{
+		"max_length on integer": {
+			values:  "count: 1\n'#count':\n  max_length: 3\n",
+			wantErr: "max_length is only allowed on a string",
+		},
+		"max_items on object": {
+			values:  "obj:\n  name: x\n'#obj':\n  max_items: 3\n",
+			wantErr: "max_items is only allowed on an array",
+		},
+		"max_properties on object": {
+			values:  "obj:\n  name: x\n'#obj':\n  max_properties: 3\n",
+			wantErr: "max_properties is only allowed on a map",
+		},
+		"max_properties on array": {
+			values:  "list:\n  - x\n'#list':\n  max_properties: 3\n",
+			wantErr: "max_properties is only allowed on a map",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := generatedCRDFromValues(t, tc.values)
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+// generatedCRDFromValues builds a one-file chart from values and generates its CRD.
+func generatedCRDFromValues(t *testing.T, values string) (apiextv1.CustomResourceDefinition, error) {
+	t.Helper()
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Chart.yaml"),
+		[]byte("apiVersion: v2\nname: bounds\nversion: 1.0.0\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "values.yaml"), []byte(values), 0644))
+
+	chartLoader, err := loader.Loader(dir)
+	require.NoError(t, err)
+	chart, err := chartLoader.Load()
+	require.NoError(t, err)
+
+	return schemagen.GenerateCRD(*chart)
+}
+
 // TestGeneratedCRD_KeepsAVersionWrittenToStatus covers what the golden files
 // cannot: a property missing from the schema is pruned by the API server on
 // write, with no error for the writer to see. The client here is deliberately

@@ -1,0 +1,268 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: instances.v1.validations.helmetica-bundles.io
+spec:
+  group: v1.validations.helmetica-bundles.io
+  names:
+    categories:
+    - all
+    - claim
+    - helmetica
+    kind: Instance
+    plural: instances
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.instanceNamespace
+      name: Instance Namespace
+      type: string
+    - jsonPath: .status.releaseStatus
+      name: Status
+      type: string
+    - jsonPath: .status.driftDetected
+      name: Drift
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: bundle
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            description: Configures the desired state of the service.
+            properties:
+              approval:
+                default:
+                  strategy: Automatic
+                description: Approval contains the approval strategy for the service.
+                properties:
+                  strategy:
+                    default: Automatic
+                    description: The approval strategy for the service. Can be either
+                      'Automatic' or 'Manual'.
+                    enum:
+                    - Automatic
+                    - Manual
+                    type: string
+                type: object
+              manages:
+                description: The dependency group whose CRDs the operator of this
+                  service manages.
+                items:
+                  properties:
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
+                  type: object
+                type: array
+              ociUrl:
+                description: The OCI repository where the service bundle is stored.
+                type: string
+              provides:
+                description: The list of dependency groups whose CRDs this service
+                  ships.
+                items:
+                  properties:
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
+                  type: object
+                type: array
+              requires:
+                description: The list of dependency groups that this service consumes.
+                items:
+                  properties:
+                    dependencyGroup:
+                      properties:
+                        as:
+                          description: Overrides the name the scope label is built
+                            from, so that a second deployment of the same operator
+                            can serve a separate set of consumers.
+                          type: string
+                        name:
+                          description: The name of the DependencyGroup.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - dependencyGroup
+                  type: object
+                type: array
+              values:
+                description: This field together with the `.spec.version` field defines
+                  the configuration of the service. Every change to either of these
+                  two fields creates a new revision of the service.
+                properties:
+                  database:
+                    description: The database settings.
+                    properties:
+                      mode:
+                        description: The mode of the database.
+                        type: string
+                        x-kubernetes-validations:
+                        - message: mode must be Auto or Manual
+                          messageExpression: '''mode must be Auto or Manual, got ''
+                            + self'
+                          rule: self in ['Auto', 'Manual']
+                      replicas:
+                        description: The number of replicas to run.
+                        type: integer
+                        x-kubernetes-validations:
+                        - message: replicas must be at least 1
+                          reason: FieldValueInvalid
+                          rule: self >= 1
+                    type: object
+                    x-kubernetes-validations:
+                    - fieldPath: .replicas
+                      message: replicas is required when mode is Manual
+                      rule: self.mode != 'Manual' || has(self.replicas)
+                  endpoints:
+                    description: The list of endpoints.
+                    items:
+                      properties:
+                        name:
+                          type: string
+                      type: object
+                    maxItems: 5
+                    type: array
+                    x-kubernetes-validations:
+                    - message: every endpoint needs a name
+                      rule: self.all(e, e.name != '')
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: The label set.
+                    maxProperties: 10
+                    type: object
+                    x-kubernetes-validations:
+                    - message: every label key must start with app.
+                      rule: self.all(k, k.startsWith('app.'))
+                  plain:
+                    description: A field without hints.
+                    type: string
+                  settings:
+                    description: An object built from an empty map.
+                    properties:
+                      name:
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: name is required
+                      rule: has(self.name)
+                  tag:
+                    description: The pinned image tag. It cannot change after creation.
+                    maxLength: 63
+                    type: string
+                    x-kubernetes-validations:
+                    - message: tag is immutable
+                      optionalOldSelf: true
+                      rule: '!oldSelf.hasValue() || self == oldSelf.value()'
+                type: object
+              version:
+                description: The version of the service. Every change to this field
+                  together with the `.spec.values` field creates a new revision of
+                  the service.
+                type: string
+            type: object
+          status:
+            description: Status contains the observed state of the service.
+            properties:
+              appliedRevision:
+                description: The name of the revision that is currently applied to
+                  the cluster.
+                type: string
+              conditions:
+                description: Conditions holds the conditions of the service.
+                items:
+                  properties:
+                    lastTransitionTime:
+                      description: The last time the condition transitioned from one
+                        status to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message about the last transition.
+                      type: string
+                    observedGeneration:
+                      description: The generation of the claim the condition was set
+                        from.
+                      format: int64
+                      type: integer
+                    reason:
+                      description: A programmatic identifier for the condition's last
+                        transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False or
+                        Unknown.
+                      type: string
+                    type:
+                      description: Type of the condition.
+                      type: string
+                  required:
+                  - type
+                  - status
+                  - reason
+                  - message
+                  - lastTransitionTime
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              driftDetected:
+                description: Whether a drift was detected.
+                type: boolean
+              instanceNamespace:
+                description: The namespace where the service is deployed in.
+                type: string
+              latestRevision:
+                description: The name of the revision that currently matches the spec.
+                type: string
+              releaseStatus:
+                description: The current status of the service.
+                type: string
+              version:
+                description: The version the framework selected for this service.
+                  Set spec.version to pin a version instead, which takes precedence
+                  over this one.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

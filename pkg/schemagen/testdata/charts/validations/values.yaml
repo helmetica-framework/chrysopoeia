@@ -1,0 +1,78 @@
+# The database settings.
+database:
+  # The number of replicas to run.
+  replicas: 1
+
+  # The mode of the database.
+  mode: Auto
+
+  '#replicas':
+    validation:
+      - rule: "self >= 1"
+        message: "replicas must be at least 1"
+        reason: FieldValueInvalid
+
+  '#mode':
+    validation:
+      - rule: "self in ['Auto', 'Manual']"
+        message: "mode must be Auto or Manual"
+        message_expression: "'mode must be Auto or Manual, got ' + self"
+
+'#database':
+  validation:
+    - rule: "self.mode != 'Manual' || has(self.replicas)"
+      message: "replicas is required when mode is Manual"
+      field_path: .replicas
+
+# The list of endpoints.
+endpoints:
+  - name: api
+
+'#endpoints':
+  max_items: 5
+  validation:
+    - rule: "self.all(e, e.name != '')"
+      message: "every endpoint needs a name"
+
+# The pinned image tag. It cannot change after creation.
+tag: "1.0.0"
+
+'#tag':
+  max_length: 63
+  validation:
+    - rule: "!oldSelf.hasValue() || self == oldSelf.value()"
+      message: "tag is immutable"
+      optional_old_self: true
+
+# The label set.
+labels: {}
+
+'#labels':
+  max_properties: 10
+  items:
+    '#':
+      type: string
+  validation:
+    - rule: "self.all(k, k.startsWith('app.'))"
+      message: "every label key must start with app."
+
+# An object built from an empty map.
+settings: {}
+
+'#settings':
+  properties:
+    '#name':
+      type: string
+  validation:
+    - rule: "has(self.name)"
+      message: "name is required"
+
+# A field without hints.
+plain: value
+
+# A computed field. Its validation hint is dropped with the field.
+computed: "cel: 1 + 1"
+
+'#computed':
+  validation:
+    - rule: "self > 0"
