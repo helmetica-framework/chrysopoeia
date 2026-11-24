@@ -122,6 +122,22 @@ func (r *DependencyRBACManager) ensureRequiresRules(ctx context.Context, provide
 			for _, rule := range req.Spec.Rules {
 				pr = pr.WithRules(applyConfigFromPolicyRule(rule))
 			}
+			for _, crdRef := range req.Spec.CRDs {
+				resource, group, found := strings.Cut(crdRef.Name, ".")
+				if !found {
+					continue
+				}
+				pr = pr.WithRules(
+					rbacv1ac.PolicyRule().
+						WithAPIGroups(group).
+						WithResources(resource, resource+"/status").
+						WithVerbs("*"),
+					rbacv1ac.PolicyRule().
+						WithAPIGroups(group).
+						WithResources(resource+"/finalizers").
+						WithVerbs("update"),
+				)
+			}
 
 			prb := rbacv1ac.
 				RoleBinding(roleName, providerNs.Name).
