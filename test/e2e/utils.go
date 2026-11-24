@@ -7,23 +7,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/shlex"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	kustomizeapi "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/resid"
 )
 
 const (
-	certmanagerVersion = "v1.19.1"
-	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
+	certmanagerVersion = "v1.21.3"
 
 	defaultKindBinary  = "kind"
 	defaultKindCluster = "kind"
@@ -48,26 +52,6 @@ func requireRun(t *testing.T, cmd *exec.Cmd) string {
 	return string(output)
 }
 
-// uninstallCertManager uninstalls the cert manager
-func uninstallCertManager(t *testing.T) {
-	t.Helper()
-
-	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	requireRun(t, exec.Command("kubectl", "delete", "-f", url))
-
-	// Delete leftover leases in kube-system (not cleaned by default)
-	kubeSystemLeases := []string{
-		"cert-manager-cainjector-leader-election",
-		"cert-manager-controller",
-	}
-	for _, lease := range kubeSystemLeases {
-		requireRun(t,
-			exec.Command("kubectl", "delete", "lease", lease,
-				"-n", "kube-system", "--ignore-not-found", "--force", "--grace-period=0"),
-		)
-	}
-}
-
 func installPrometheusOperatorCRDs(t *testing.T) {
 	t.Helper()
 
@@ -75,20 +59,11 @@ func installPrometheusOperatorCRDs(t *testing.T) {
 	requireRun(t, exec.Command("kubectl", "apply", "-f", url))
 }
 
-func uninstallPrometheusOperatorCRDs(t *testing.T) {
-	t.Helper()
-
-	url := fmt.Sprintf(prometheusOperatorURL, prometheusOperatorVersion)
-	requireRun(t, exec.Command("kubectl", "delete", "-f", url))
-}
-
 // installCertManager installs the cert manager bundle.
 func installCertManager(t *testing.T) {
 	t.Helper()
 
-	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-
-	requireRun(t, exec.Command("kubectl", "apply", "-f", url))
+	requireRun(t, exec.Command("helm", "upgrade", "--install", "cert-manager", "oci://quay.io/jetstack/charts/cert-manager", "--namespace", "cert-manager", "--create-namespace", "--version", certmanagerVersion, "--set", "crds.enabled=true"))
 
 	// Wait for cert-manager-webhook to be ready, which can take time if cert-manager
 	// was re-installed after uninstalling on a cluster.
@@ -245,19 +220,34 @@ func buildAndUploadManagerImage(t *testing.T, projectDir, buildDir string) {
 	requireLoadImageToKindClusterWithName(t, projectImage)
 }
 
+func buildAndUploadTestControllerImage(t *testing.T, projectDir, buildDir string) {
+	t.Helper()
+
+	const testControllerPath = "./test/e2e/testdata/testcontroller"
+	const testControllerImage = "local.dev/testcontroller:latest"
+
+	makeCmd := exec.Command("make")
+	makeCmd.Dir = path.Join(projectDir, testControllerPath)
+	requireRun(t, makeCmd)
+
+	buildCmd := exec.Command("go", "build", "-o", path.Join(buildDir, "testcontroller"), "./cmd")
+	buildCmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux")
+	buildCmd.Dir = path.Join(projectDir, testControllerPath)
+	requireRun(t, buildCmd)
+	imageBuildCmd := exec.Command("docker", "build", "-f", path.Join(projectDir, testControllerPath, "Dockerfile"), "-t", testControllerImage, buildDir)
+	requireRun(t, imageBuildCmd)
+
+	requireLoadImageToKindClusterWithName(t, testControllerImage)
+}
+
 func installControllerManager(t *testing.T, projectDir, tmpDir string) {
 	t.Helper()
 
-	requireFilepathRel := func(base, target string) string {
-		rel, err := filepath.Rel(base, target)
-		require.NoError(t, err)
-		return rel
-	}
-
 	kf := kustomizeapi.Kustomization{
 		Resources: []string{
-			requireFilepathRel(tmpDir, path.Join(projectDir, "config", "crd")),
-			requireFilepathRel(tmpDir, path.Join(projectDir, "config", "default")),
+			requireFilepathRel(t, tmpDir, path.Join(projectDir, "config", "crd")),
+			requireFilepathRel(t, tmpDir, path.Join(projectDir, "config", "default")),
+			requireFilepathRel(t, tmpDir, path.Join(projectDir, "config", "proxy")),
 		},
 		// Override the manager image to use the locally built one
 		Images: []kustomizeapi.Image{
@@ -269,22 +259,20 @@ func installControllerManager(t *testing.T, projectDir, tmpDir string) {
 		},
 		// Replace imagePullPolicy to Never in all managed deployments to use the locally loaded image in kind
 		Replacements: []kustomizeapi.ReplacementField{{
-			Replacement: kustomizeapi.Replacement{
-				SourceValue: ptr.To("Never"),
-				Targets: []*kustomizeapi.TargetSelector{{
-					Select: &kustomizeapi.Selector{
-						ResId: resid.NewResIdKindOnly("Deployment", ""),
-					},
-					Options: &kustomizeapi.FieldOptions{Create: true},
-					FieldPaths: []string{
-						"spec.template.spec.containers.*.imagePullPolicy",
-					},
-				}},
-			},
+			SourceValue: ptr.To("Never"),
+			Targets: []*kustomizeapi.TargetSelector{{
+				Select: &kustomizeapi.Selector{
+					ResId: resid.NewResIdKindOnly("Deployment", ""),
+				},
+				Options: &kustomizeapi.FieldOptions{Create: true},
+				FieldPaths: []string{
+					"spec.template.spec.containers.*.imagePullPolicy",
+				},
+			}},
 		}},
 		Patches: []kustomizeapi.Patch{{
 			Target: &kustomizeapi.Selector{
-				ResId: resid.NewResIdKindOnly("Deployment", ""),
+				ResId: resid.NewResIdWithNamespace(resid.FromKind("Deployment"), "chrysopoeia-controller-manager", "chrysopoeia-system"),
 			},
 			Patch: `[{"op":"test","path":"/spec/template/spec/containers/0/name","value":"manager"},{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--image-reflector-controller-hostname=image-reflector-controller-tags.chrysopoeia-flux-system.svc:8090"}]`,
 		}},
@@ -302,4 +290,55 @@ func installControllerManager(t *testing.T, projectDir, tmpDir string) {
 	t.Log("Installing flux...")
 
 	requireRun(t, exec.Command("kubectl", "apply", "-k", path.Join(projectDir, "config", "flux")))
+}
+
+func requireFilepathRel(t *testing.T, base, target string) string {
+	t.Helper()
+	rel, err := filepath.Rel(base, target)
+	require.NoError(t, err)
+	return rel
+}
+
+func installOCIRegistry(t *testing.T, c client.Reader, projectDir string) (extPort int, certCA []byte) {
+	t.Helper()
+
+	requireRun(t, exec.Command("kubectl", "apply", "-f", path.Join(projectDir, "test/e2e/testdata/oci-registry.yaml")))
+	requireDeploymentAvailable(t, "oci-registry-system", "registry")
+
+	var certSecret corev1.Secret
+	require.NoError(t, c.Get(t.Context(), types.NamespacedName{Name: "tls-server-certificate", Namespace: "oci-registry-system"}, &certSecret))
+	certCA, ok := certSecret.Data["ca.crt"]
+	if !ok {
+		t.Fatalf("CA certificate not found in secret %+v", certSecret)
+	}
+
+	fwdPort, err := freePort()
+	require.NoError(t, err)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		cmd := exec.CommandContext(t.Context(), "kubectl", "port-forward", "-n", "oci-registry-system", "svc/registry", fmt.Sprintf("%d:5000", fwdPort))
+		t.Log("Executing command:", fmt.Sprintf("(PWD=%s)", cmd.Dir), strings.Join(cmd.Args, " "))
+
+		// Run the command and log any errors, but don't fail the test if it is killed due to test finished.
+		if err := cmd.Run(); err != nil && t.Context().Err() == nil {
+			t.Errorf("Error occurred while running command %v: %v", cmd.Args, err)
+		}
+	})
+	t.Cleanup(wg.Wait)
+
+	return fwdPort, certCA
+}
+
+// freePort returns a free port on the host.
+func freePort() (int, error) {
+	a, err := net.ResolveTCPAddr("tcp", ":0")
+	if err != nil {
+		return 0, err
+	}
+	l, err := net.ListenTCP("tcp", a)
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
 }

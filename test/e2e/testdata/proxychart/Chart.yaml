@@ -1,0 +1,8 @@
+apiVersion: v2
+name: proxychart
+description: A Helm chart that outputs whatever is put into `.raw` in the values.yaml file.
+
+type: application
+
+version: 0.1.0
+appVersion: unknown
