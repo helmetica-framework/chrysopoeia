@@ -233,6 +233,7 @@ func runController(cmd *cobra.Command, _ []string) error {
 				// The harness only ever reads the proxy's serving certificate.
 				&corev1.Secret{}: {
 					Namespaces: map[string]cache.Config{
+						controllerNamespace:     {},
 						harnessProxyCANamespace: {},
 					},
 				},

@@ -11,9 +11,9 @@ import (
 	"time"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +35,7 @@ import (
 
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	chrysopoeiav1ac "github.com/helmetica-framework/chrysopoeia/api/v1/applyconfiguration/api/v1"
+	"github.com/helmetica-framework/chrysopoeia/pkg/claimdef"
 )
 
 type ReleaseController struct {
@@ -47,6 +48,7 @@ type ReleaseController struct {
 }
 
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 //+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;roles;rolebindings;clusterrolebindings,verbs=get;list;watch;create;update;patch
 
@@ -410,7 +412,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 
-	claimSource, err := r.findSourceFromClaim(ctx, &instance)
+	claimSource, err := claimdef.FindDefinitionForClaim(ctx, r.Client, &instance)
 	if err != nil {
 		return fmt.Errorf("failed to load source of claim: %w", err)
 	}
@@ -419,7 +421,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		Role(addlPermRoleName, helmNSName).
 		WithAnnotations(commonAnnotations).
 		WithLabels(commonLabels)
-	for _, rule := range claimSource.Spec.InstancePermissions.AdditionalRules {
+	for _, rule := range claimSource.ClaimDefinition.Spec.InstancePermissions.AdditionalRules {
 		addlPermRole = addlPermRole.WithRules(applyConfigFromPolicyRule(rule))
 	}
 	addlPermRoleBinding := rbacv1ac.RoleBinding(addlPermRoleName, helmNSName).
@@ -441,7 +443,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		ClusterRole(addlPermCRName).
 		WithAnnotations(commonAnnotations).
 		WithLabels(commonLabels)
-	for _, rule := range claimSource.Spec.InstancePermissions.AdditionalClusterRules {
+	for _, rule := range claimSource.ClaimDefinition.Spec.InstancePermissions.AdditionalClusterRules {
 		addlPermClusterRole = addlPermClusterRole.WithRules(applyConfigFromPolicyRule(rule))
 	}
 	addlPermClusterRoleBinding := rbacv1ac.ClusterRoleBinding(addlPermCRName).
@@ -467,10 +469,17 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return fmt.Errorf("failed to setup additional permissions: %w", err)
 	}
 
+	artifactName := fmt.Sprintf("artifact-%s", strings.TrimPrefix(digest, "sha256:"))
+	if cs := claimSource.OCIRepositoryCertSecret; cs != nil {
+		ccs := corev1ac.Secret(artifactName+"-cert", helmNSName).WithData(cs.Data)
+		if err := r.Apply(ctx, ccs, ownerOpt); err != nil {
+			return err
+		}
+	}
 	artifact := &sourcev1.OCIRepository{}
 	artifact.SetGroupVersionKind(sourcev1.GroupVersion.WithKind("OCIRepository"))
 	artifact.SetNamespace(helmNSName)
-	artifact.SetName(fmt.Sprintf("artifact-%s", strings.TrimPrefix(digest, "sha256:")))
+	artifact.SetName(artifactName)
 	artifact.SetAnnotations(commonAnnotations)
 	artifact.SetLabels(commonLabels)
 	artifact.Spec.URL = revision.Spec.OCIUrl
@@ -478,6 +487,9 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	artifact.Spec.Interval = metav1.Duration{Duration: 9 * 24 * time.Hour}
 	artifact.Spec.Reference = &sourcev1.OCIRepositoryRef{
 		Digest: digest,
+	}
+	if claimSource.OCIRepositoryCertSecret != nil {
+		artifact.Spec.CertSecretRef = &fluxmeta.LocalObjectReference{Name: artifactName + "-cert"}
 	}
 	aac, err := runtime.DefaultUnstructuredConverter.ToUnstructured(artifact)
 	if err != nil {
@@ -544,28 +556,6 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 		return err
 	}
 	return nil
-}
-
-func (r *ReleaseController) findSourceFromClaim(ctx context.Context, u client.Object) (chrysopoeiav1.ClaimDefinition, error) {
-	gvk := u.GetObjectKind().GroupVersionKind()
-	gvr, err := r.RESTMapper().RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		return chrysopoeiav1.ClaimDefinition{}, fmt.Errorf("unable to map GVK to GVR: %w", err)
-	}
-	var crd apiextv1.CustomResourceDefinition
-	if err := r.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("%s.%s", gvr.Resource.Resource, gvr.Resource.Group)}, &crd); err != nil {
-		return chrysopoeiav1.ClaimDefinition{}, fmt.Errorf("unable to load CRD: %w", err)
-	}
-	crdsName := crd.Annotations["chrysopoeia.io/source-ref-name"]
-	crdsNamespace := crd.Annotations["chrysopoeia.io/source-ref-namespace"]
-	if crdsName == "" || crdsNamespace == "" {
-		return chrysopoeiav1.ClaimDefinition{}, fmt.Errorf("unable to retrieve ClaimDefinition from CustomResourceDefinition; name or namespace missing ns=%q name%q", crdsNamespace, crdsName)
-	}
-	var crds chrysopoeiav1.ClaimDefinition
-	if err := r.Get(ctx, client.ObjectKey{Namespace: crdsNamespace, Name: crdsName}, &crds); err != nil {
-		return chrysopoeiav1.ClaimDefinition{}, fmt.Errorf("unable to load ClaimDefinition: %w", err)
-	}
-	return crds, nil
 }
 
 // appuioNamespaceLabels returns a map of labels that are required on the APPUiO platform for its multi-tenant feautures.

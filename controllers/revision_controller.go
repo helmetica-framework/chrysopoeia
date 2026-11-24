@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	helmutil "helm.sh/helm/v4/pkg/chart/common/util"
 	corev1 "k8s.io/api/core/v1"
@@ -22,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,6 +38,7 @@ import (
 	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 	chrysopoeiav1ac "github.com/helmetica-framework/chrysopoeia/api/v1/applyconfiguration/api/v1"
 	"github.com/helmetica-framework/chrysopoeia/pkg/celvalues"
+	"github.com/helmetica-framework/chrysopoeia/pkg/claimdef"
 )
 
 const platformValuesAnnotation = "chrysopoeia.io/platform-values"
@@ -407,13 +410,41 @@ func (r *RevisionManager) SetupDynamicControllerWithWatches(dynCtrl controller.T
 // ensureOCIRepository ensures that an OCIRepository exists for the given instance and returns it.
 // callers should check the status of the returned OCIRepository to ensure that it is ready before proceeding with any further actions.
 func (r *RevisionManager) ensureOCIRepository(ctx context.Context, instance unstructured.Unstructured, ociUrl, version string) (*sourcev1.OCIRepository, error) {
+	fieldOwner := client.FieldOwner(fmt.Sprintf("chrysopoeia-controller:%s", instance.GetName()))
+	repoName := strings.Join([]string{"chrysopoeia", fmt.Sprintf("%x", sha256.Sum256([]byte(ociUrl)))[0:10], version}, "-")
+
+	cd, err := claimdef.FindDefinitionForClaim(ctx, r.Client, &instance)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get definition for claim: %w", err)
+	}
+
+	// TODO i'm not sure if we even should allow changing URLs on instances.
+	// Can be good for testing but probably has some weird corner cases when we need to expose more options on the OCIArtifact
+	refCertSecret := cd.OCIRepositoryCertSecret != nil && ociUrl == cd.OCIRepository.Spec.URL
+	if refCertSecret {
+		sc := corev1ac.
+			Secret(repoName, instance.GetNamespace()).
+			WithData(cd.OCIRepositoryCertSecret.Data).
+			WithOwnerReferences(metav1ac.OwnerReference().
+				WithAPIVersion(instance.GetAPIVersion()).
+				WithKind(instance.GetKind()).
+				WithName(instance.GetName()).
+				WithUID(instance.GetUID()))
+		if err := r.Apply(ctx, sc, fieldOwner); err != nil {
+			return nil, fmt.Errorf("failed to apply Secret with repository certs: %w", err)
+		}
+	}
+
 	var ociRepo sourcev1.OCIRepository
 	ociRepo.SetGroupVersionKind(sourcev1.GroupVersion.WithKind("OCIRepository"))
 	ociRepo.SetNamespace(instance.GetNamespace())
-	ociRepo.SetName(strings.Join([]string{"chrysopoeia", fmt.Sprintf("%x", sha256.Sum256([]byte(ociUrl)))[0:10], version}, "-"))
+	ociRepo.SetName(repoName)
 	ociRepo.Spec.URL = ociUrl
 	ociRepo.Spec.Reference = &sourcev1.OCIRepositoryRef{Tag: version}
 	ociRepo.Spec.Interval = metav1.Duration{Duration: 24 * time.Hour}
+	if refCertSecret {
+		ociRepo.Spec.CertSecretRef = &meta.LocalObjectReference{Name: repoName}
+	}
 
 	if err := controllerutil.SetOwnerReference(&instance, &ociRepo, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set owner reference: %w", err)
@@ -424,7 +455,7 @@ func (r *RevisionManager) ensureOCIRepository(ctx context.Context, instance unst
 		return nil, fmt.Errorf("failed to convert OCIRepository to unstructured apply config: %w", err)
 	}
 
-	if err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(&unstructured.Unstructured{Object: ac}), client.FieldOwner(fmt.Sprintf("chrysopoeia-controller:%s", instance.GetName()))); err != nil {
+	if err := r.Apply(ctx, client.ApplyConfigurationFromUnstructured(&unstructured.Unstructured{Object: ac}), fieldOwner); err != nil {
 		return nil, fmt.Errorf("failed to apply OCIRepository: %w", err)
 	}
 
