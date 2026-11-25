@@ -87,6 +87,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: harnessRef
       type:
         namedType: com.github.helmetica-framework.chrysopoeia.api.v1.HarnessReference
+    - name: managerRules
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.api.rbac.v1.PolicyRule
+          elementRelationship: atomic
     - name: rules
       type:
         list:

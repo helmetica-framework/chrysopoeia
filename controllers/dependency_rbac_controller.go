@@ -81,6 +81,10 @@ func (r *DependencyRBACManager) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, fmt.Errorf("unable to ensure provider roles: %w", err)
 	}
 
+	if err := r.ensureLocalManagerRules(ctx, ns, managesGroups); err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to ensure provider roles: %w", err)
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -158,6 +162,63 @@ func (r *DependencyRBACManager) ensureRequiresRules(ctx context.Context, provide
 			); err != nil {
 				return fmt.Errorf("unable to apply role or rolebinding: %w", err)
 			}
+		}
+	}
+
+	return nil
+}
+
+func (r *DependencyRBACManager) ensureLocalManagerRules(ctx context.Context, managerNs corev1.Namespace, manages []chrysopoeiav1.DependencyGroup) error {
+	l := log.FromContext(ctx).WithName("DependencyRBACManager.ensureLocalManagerRules")
+
+	for _, req := range manages {
+		l.Info("Namespace manages", "requirement", req)
+
+		var serviceAccounts corev1.ServiceAccountList
+		if err := r.List(ctx, &serviceAccounts, client.InNamespace(managerNs.Name)); err != nil {
+			return fmt.Errorf("unable to list service accounts in provider namespace: %w", err)
+		}
+
+		subjects := make([]*rbacv1ac.SubjectApplyConfiguration, 0, len(serviceAccounts.Items))
+		for _, sa := range serviceAccounts.Items {
+			subjects = append(subjects,
+				rbacv1ac.Subject().
+					WithKind("ServiceAccount").
+					WithName(sa.Name).
+					WithNamespace(sa.Namespace),
+			)
+		}
+
+		roleName := strings.Join([]string{"chrysopoeia", "manager", "local"}, ":")
+
+		pr := rbacv1ac.
+			Role(roleName, managerNs.Name).
+			WithLabels(map[string]string{
+				"chrysopoeia.io/managed": "",
+			})
+
+		for _, rule := range req.Spec.LocalRules {
+			pr = pr.WithRules(applyConfigFromPolicyRule(rule))
+		}
+
+		prb := rbacv1ac.
+			RoleBinding(roleName, managerNs.Name).
+			WithLabels(map[string]string{
+				"chrysopoeia.io/managed": "",
+			}).
+			WithRoleRef(
+				rbacv1ac.RoleRef().
+					WithAPIGroup("rbac.authorization.k8s.io").
+					WithKind("Role").
+					WithName(roleName),
+			).
+			WithSubjects(subjects...)
+
+		if err := errors.Join(
+			r.Apply(ctx, pr, client.ForceOwnership, client.FieldOwner(dependencyRBACManagerName)),
+			r.Apply(ctx, prb, client.ForceOwnership, client.FieldOwner(dependencyRBACManagerName)),
+		); err != nil {
+			return fmt.Errorf("unable to apply role or rolebinding: %w", err)
 		}
 	}
 

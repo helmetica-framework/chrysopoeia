@@ -365,6 +365,13 @@ func (in *DependencyGroupSpec) DeepCopyInto(out *DependencyGroupSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.LocalRules != nil {
+		in, out := &in.LocalRules, &out.LocalRules
+		*out = make([]rbacv1.PolicyRule, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.HarnessRef != nil {
 		in, out := &in.HarnessRef, &out.HarnessRef
 		*out = new(HarnessReference)

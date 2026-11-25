@@ -19,6 +19,8 @@ type DependencyGroupSpecApplyConfiguration struct {
 	Rules []rbacv1.PolicyRule `json:"rules,omitempty"`
 	// ClusterRules grants any service account in the 'manages' namespace the given permissions on the cluster level.
 	ClusterRules []rbacv1.PolicyRule `json:"clusterRules,omitempty"`
+	// LocalRules grants the service accounts in the 'manages' namespace namespace local permissions
+	LocalRules []rbacv1.PolicyRule `json:"managerRules,omitempty"`
 	// HarnessRef references the harness of the operator managing the CRDs of this group.
 	HarnessRef *HarnessReferenceApplyConfiguration `json:"harnessRef,omitempty"`
 }
@@ -58,6 +60,16 @@ func (b *DependencyGroupSpecApplyConfiguration) WithRules(values ...rbacv1.Polic
 func (b *DependencyGroupSpecApplyConfiguration) WithClusterRules(values ...rbacv1.PolicyRule) *DependencyGroupSpecApplyConfiguration {
 	for i := range values {
 		b.ClusterRules = append(b.ClusterRules, values[i])
+	}
+	return b
+}
+
+// WithLocalRules adds the given value to the LocalRules field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the LocalRules field.
+func (b *DependencyGroupSpecApplyConfiguration) WithLocalRules(values ...rbacv1.PolicyRule) *DependencyGroupSpecApplyConfiguration {
+	for i := range values {
+		b.LocalRules = append(b.LocalRules, values[i])
 	}
 	return b
 }

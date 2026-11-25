@@ -17,6 +17,7 @@ import (
 
 	homunculusv1ac "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1/applyconfiguration/api/v1"
 	"github.com/stretchr/testify/require"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -180,7 +181,41 @@ spec:
 		crdRefs[i] = chrysopoeiav1ac.DependencyGroupCRD().WithName(name)
 	}
 	suite.requireApply(
-		chrysopoeiav1ac.DependencyGroup("group1").WithSpec(chrysopoeiav1ac.DependencyGroupSpec().WithCRDs(crdRefs...)),
+		chrysopoeiav1ac.DependencyGroup("group1").
+			WithSpec(chrysopoeiav1ac.DependencyGroupSpec().
+				WithCRDs(crdRefs...).
+				WithLocalRules(
+					rbacv1.PolicyRule{
+						APIGroups: []string{"coordination.k8s.io"},
+						Resources: []string{"leases"},
+						Verbs:     []string{"*"},
+					},
+				).
+				WithClusterRules(
+					rbacv1.PolicyRule{
+						APIGroups: []string{"authorization.k8s.io"},
+						Resources: []string{"selfsubjectaccessreviews"},
+						Verbs:     []string{"create"},
+					},
+					rbacv1.PolicyRule{
+						APIGroups: []string{"rbac.authorization.k8s.io"},
+						Resources: []string{"clusterroles"},
+						Verbs:     []string{"get"},
+					},
+				).
+				WithRules(
+					rbacv1.PolicyRule{
+						APIGroups: []string{""},
+						Resources: []string{"events"},
+						Verbs:     []string{"create", "patch"},
+					},
+					rbacv1.PolicyRule{
+						APIGroups: []string{""},
+						Resources: []string{"configmaps"},
+						Verbs:     []string{"*"},
+					},
+				),
+			),
 		client.FieldOwner("e2e-test"))
 
 	providerClaim := new(unstructured.Unstructured)
