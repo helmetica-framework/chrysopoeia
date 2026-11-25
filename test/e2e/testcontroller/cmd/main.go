@@ -84,7 +84,7 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
-	flag.StringVar(&controllerId, "controller-id", "unknown", "Controller ID added to the status of the test manifest.")
+	flag.StringVar(&controllerId, "controller-id", "unknown", "Controller ID added to the status of the test manifest after a successful reconcile.")
 
 	opts := zap.Options{
 		Development: true,
