@@ -40,9 +40,13 @@ binary:
 manifests:
     go tool sigs.k8s.io/controller-tools/cmd/controller-gen rbac:roleName=manager-role crd:generateEmbeddedObjectMeta=true applyconfiguration webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-# Generate documentation
+# Build the docs as they appear on docs.helmetica.io; fails on warnings
 docs:
-    @echo "Nothing to do yet"
+    GOTOOLCHAIN=auto GOEXPERIMENT=jsonv2 go run github.com/helmetica-framework/rosarium@v0.1.0 preview .
+
+# Build the docs and serve them on http://localhost:2020
+docs-serve:
+    GOTOOLCHAIN=auto GOEXPERIMENT=jsonv2 go run github.com/helmetica-framework/rosarium@v0.1.0 preview . --serve :2020
 
 # Generate manifests e.g. CRD, RBAC etc.
 generate:
