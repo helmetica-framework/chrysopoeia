@@ -51,7 +51,7 @@ func (r *TestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to get Test", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get Test: %w", err)
 	}
 
 	tac := homunculusv1ac.Test(req.Name, req.Namespace).WithStatus(homunculusv1ac.TestStatus().WithControllerID(r.ControllerId))
