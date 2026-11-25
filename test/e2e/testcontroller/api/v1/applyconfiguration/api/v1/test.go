@@ -3,7 +3,7 @@
 package v1
 
 import (
-	apiv1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/api/v1"
+	apiv1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1"
 	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"

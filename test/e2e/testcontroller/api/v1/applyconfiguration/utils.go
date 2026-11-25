@@ -3,9 +3,9 @@
 package applyconfiguration
 
 import (
-	v1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/api/v1"
-	apiv1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/api/v1/applyconfiguration/api/v1"
-	internal "github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/api/v1/applyconfiguration/internal"
+	v1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1"
+	apiv1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1/applyconfiguration/api/v1"
+	internal "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1/applyconfiguration/internal"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	managedfields "k8s.io/apimachinery/pkg/util/managedfields"

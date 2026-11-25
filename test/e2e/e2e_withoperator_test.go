@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	homunculusv1ac "github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/api/v1/applyconfiguration/api/v1"
+	homunculusv1ac "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1/applyconfiguration/api/v1"
 	"github.com/stretchr/testify/require"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -164,7 +164,7 @@ spec:
 	}
 
 	suite.T().Log("Install provider...")
-	crds, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(filesys.MakeFsOnDisk(), path.Join(suite.projectDir, "test/e2e/testdata/testcontroller/config/crd"))
+	crds, err := krusty.MakeKustomizer(krusty.MakeDefaultOptions()).Run(filesys.MakeFsOnDisk(), path.Join(suite.projectDir, "test/e2e/testcontroller/config/crd"))
 	suite.Require().NoError(err)
 
 	providedCRDNames := make([]string, 0)
@@ -219,7 +219,7 @@ spec:
 	})
 	mk := kustomizeapi.Kustomization{
 		Resources: []string{
-			requireFilepathRel(suite.T(), tmpDir, path.Join(suite.projectDir, "test/e2e/testdata/testcontroller/config/default")),
+			requireFilepathRel(suite.T(), tmpDir, path.Join(suite.projectDir, "test/e2e/testcontroller/config/default")),
 		},
 		Patches: []kustomizeapi.Patch{{
 			Target: &kustomizeapi.Selector{

@@ -26,8 +26,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	homunculusv1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/api/v1"
-	homunculusv1ac "github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/api/v1/applyconfiguration/api/v1"
+	homunculusv1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1"
+	homunculusv1ac "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1/applyconfiguration/api/v1"
 )
 
 // TestReconciler reconciles a Test object

@@ -35,8 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	homunculushelmeticaiov1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/api/v1"
-	"github.com/helmetica-framework/chrysopoeia/test/e2e/testdata/testcontroller/internal/controller"
+	homunculushelmeticaiov1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1"
+	"github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

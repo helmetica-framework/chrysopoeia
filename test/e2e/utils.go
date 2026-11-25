@@ -223,7 +223,7 @@ func buildAndUploadManagerImage(t *testing.T, projectDir, buildDir string) {
 func buildAndUploadTestControllerImage(t *testing.T, projectDir, buildDir string) {
 	t.Helper()
 
-	const testControllerPath = "./test/e2e/testdata/testcontroller"
+	const testControllerPath = "./test/e2e/testcontroller"
 	const testControllerImage = "local.dev/testcontroller:latest"
 
 	makeCmd := exec.Command("make")
