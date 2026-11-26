@@ -38,6 +38,7 @@ binary:
 
 # Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 manifests:
+    go run ./hack/syncfluxdeploy config/flux/kustomization.yaml
     go tool sigs.k8s.io/controller-tools/cmd/controller-gen rbac:roleName=manager-role crd:generateEmbeddedObjectMeta=true applyconfiguration webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Build the docs as they appear on docs.helmetica.io; fails on warnings
