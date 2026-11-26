@@ -9,7 +9,7 @@ require (
 	github.com/fluxcd/pkg/apis/meta v1.40.0
 	github.com/fluxcd/source-controller/api v1.10.2
 	github.com/go-logr/logr v1.4.4
-	github.com/google/cel-go v0.31.0
+	github.com/google/cel-go v0.32.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
