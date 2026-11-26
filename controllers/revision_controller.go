@@ -441,7 +441,7 @@ func (r *RevisionManager) ensureOCIRepository(ctx context.Context, instance unst
 	ociRepo.SetName(repoName)
 	ociRepo.Spec.URL = ociUrl
 	ociRepo.Spec.Reference = &sourcev1.OCIRepositoryRef{Tag: version}
-	ociRepo.Spec.Interval = metav1.Duration{Duration: 24 * time.Hour}
+	ociRepo.Spec.Interval = &metav1.Duration{Duration: 24 * time.Hour}
 	if refCertSecret {
 		ociRepo.Spec.CertSecretRef = &meta.LocalObjectReference{Name: repoName}
 	}
