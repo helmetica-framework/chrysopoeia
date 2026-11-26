@@ -484,7 +484,7 @@ func (r *ReleaseController) ensureRelease(ctx context.Context, instance unstruct
 	artifact.SetLabels(commonLabels)
 	artifact.Spec.URL = revision.Spec.OCIUrl
 	// We pin the artifact to the digest of the approved revision, and set a long interval to avoid unnecessary re-reconciliation.
-	artifact.Spec.Interval = metav1.Duration{Duration: 9 * 24 * time.Hour}
+	artifact.Spec.Interval = &metav1.Duration{Duration: 9 * 24 * time.Hour}
 	artifact.Spec.Reference = &sourcev1.OCIRepositoryRef{
 		Digest: digest,
 	}
