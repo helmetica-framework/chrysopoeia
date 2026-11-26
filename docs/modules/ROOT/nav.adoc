@@ -1,0 +1,13 @@
+* xref:index.adoc[Overview]
+
+.Explanations
+* xref:explanations/architecture.adoc[explanations/architecture.adoc]
+
+.How-tos
+* xref:how-tos/install.adoc[how-tos/install.adoc]
+* xref:how-tos/platform-values.adoc[Operations]
+* xref:how-tos/develop.adoc[Develop]
+
+.References
+* xref:references/configuration.adoc[references/configuration.adoc]
+* xref:references/libraries.adoc[Go libraries]

@@ -1,0 +1,3 @@
+= Install
+
+TODO: how to install it on a cluster.

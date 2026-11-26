@@ -1,0 +1,5 @@
+= Go libraries
+
+* https://pkg.go.dev/github.com/helmetica-framework/chrysopoeia/pkg/schemagen[schemagen] - Generate CRDs from Helm charts.
+* https://pkg.go.dev/github.com/helmetica-framework/chrysopoeia/pkg/breakagedetection[breakagedetection] - Detect breaking changes between CRD versions.
+* https://pkg.go.dev/github.com/helmetica-framework/chrysopoeia/pkg/celvalues[celvalues] - Evaluate the CEL expressions in a wrapper chart's values.yaml.
