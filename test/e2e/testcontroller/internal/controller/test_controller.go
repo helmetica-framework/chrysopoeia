@@ -19,12 +19,19 @@ package controller
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
+	authorizationv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	homunculusv1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1"
@@ -36,7 +43,10 @@ const Finalizer = "homunculus.helmetica.io/cleanup"
 // TestReconciler reconciles a Test object
 type TestReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	ClientSet *kubernetes.Clientset
+	Scheme    *runtime.Scheme
+
+	Recorder events.EventRecorder
 
 	ControllerId string
 }
@@ -68,9 +78,42 @@ func (r *TestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, fmt.Errorf("failed to patch resource status: %w", err)
 	}
 
+	ssar, err := r.ClientSet.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
+		Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
+				Verb:     "get",
+				Group:    "rbac.authorization.k8s.io",
+				Version:  "v1",
+				Resource: "clusterroles",
+			},
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to do SSAR: %w", err)
+	}
+	if !ssar.Status.Allowed {
+		return ctrl.Result{}, fmt.Errorf("expected to have get permissions on clusterroles: %+v", ssar.Status)
+	}
+
+	data := map[string]string{
+		"observedResourceVersion": ti.ResourceVersion,
+	}
+	cm := &corev1.ConfigMap{
+		Name:      ti.Name,
+		Namespace: ti.Namespace,
+		Data:      data,
+	}
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, cm, func() error {
+		maps.Copy(cm.Data, data)
+		return nil
+	})
+	l.Info("ensured test config map", "op", string(op))
+
 	if err := r.Status().Apply(ctx, acFromInstance(ti).WithStatus(homunculusv1ac.TestStatus().WithControllerID(r.ControllerId)), client.FieldOwner("test-status-manager")); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch resource status: %w", err)
 	}
+
+	r.Recorder.Eventf(&ti, nil, "Normal", "SuccessfulReconcile", "Reconcile", "successful reconcile")
 
 	return ctrl.Result{}, nil
 }
