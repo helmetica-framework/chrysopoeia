@@ -145,7 +145,7 @@ spec:
                 - kind
                 - name
                 type: object
-              managerRules:
+              localRules:
                 description: LocalRules grants the service accounts in the 'manages'
                   namespace namespace local permissions
                 items:

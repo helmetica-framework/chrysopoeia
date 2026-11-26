@@ -20,7 +20,7 @@ type DependencyGroupSpecApplyConfiguration struct {
 	// ClusterRules grants any service account in the 'manages' namespace the given permissions on the cluster level.
 	ClusterRules []rbacv1.PolicyRule `json:"clusterRules,omitempty"`
 	// LocalRules grants the service accounts in the 'manages' namespace namespace local permissions
-	LocalRules []rbacv1.PolicyRule `json:"managerRules,omitempty"`
+	LocalRules []rbacv1.PolicyRule `json:"localRules,omitempty"`
 	// HarnessRef references the harness of the operator managing the CRDs of this group.
 	HarnessRef *HarnessReferenceApplyConfiguration `json:"harnessRef,omitempty"`
 }
