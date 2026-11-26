@@ -1,19 +1,18 @@
-
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: chrysopoeia-flux-system
+patches:
+- path: image_reflector_serve_tags_patch.yaml
 resources:
-- https://github.com/fluxcd/source-controller//config/crd?ref=v1.9.6
-- https://github.com/fluxcd/source-controller//config/rbac?ref=v1.9.6
-- https://github.com/fluxcd/source-controller//config/manager?ref=v1.9.6
-- https://github.com/fluxcd/image-reflector-controller//config/crd?ref=v1.2.5
-- https://github.com/fluxcd/image-reflector-controller//config/rbac?ref=v1.2.5
-- https://github.com/fluxcd/image-reflector-controller//config/manager?ref=v1.2.5
-- https://github.com/fluxcd/helm-controller//config/crd?ref=v1.6.5
-- https://github.com/fluxcd/helm-controller//config/rbac?ref=v1.6.5
-- https://github.com/fluxcd/helm-controller//config/manager?ref=v1.6.5
+- https://github.com/fluxcd/source-controller//config/crd?ref=v1.10.2
+- https://github.com/fluxcd/source-controller//config/rbac?ref=v1.10.2
+- https://github.com/fluxcd/source-controller//config/manager?ref=v1.10.2
+- https://github.com/fluxcd/image-reflector-controller//config/crd?ref=v1.3.1
+- https://github.com/fluxcd/image-reflector-controller//config/rbac?ref=v1.3.1
+- https://github.com/fluxcd/image-reflector-controller//config/manager?ref=v1.3.1
+- https://github.com/fluxcd/helm-controller//config/crd?ref=v1.7.2
+- https://github.com/fluxcd/helm-controller//config/rbac?ref=v1.7.2
+- https://github.com/fluxcd/helm-controller//config/manager?ref=v1.7.2
 - tag-serve-nginx-conf.yaml
 - tags-serve-service.yaml
 - namespace.yaml
-patches:
-- path: image_reflector_serve_tags_patch.yaml
