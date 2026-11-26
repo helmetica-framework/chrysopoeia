@@ -9,6 +9,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	chrysopoeiav1 "github.com/helmetica-framework/chrysopoeia/api/v1"
 )
 
 var (
@@ -22,32 +28,48 @@ var (
 type E2ESuite struct {
 	suite.Suite
 
+	client client.WithWatch
+
 	projectDir string
 	buildDir   string
 
-	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
-	isCertManagerAlreadyInstalled        bool
-	isPrometheusOperatorAlreadyInstalled bool
+	ociRegistryPort int
+	ociRegistryCert []byte
 }
 
 func (suite *E2ESuite) SetupSuite() {
+	{
+		scheme := runtime.NewScheme()
+		suite.Require().NoError(chrysopoeiav1.AddToScheme(scheme))
+		suite.Require().NoError(clientgoscheme.AddToScheme(scheme))
+		conf, err := ctrl.GetConfig()
+		suite.Require().NoError(err)
+		c, err := client.NewWithWatch(conf, client.Options{Scheme: scheme})
+		suite.Require().NoError(err)
+		suite.client = c
+	}
+
 	suite.projectDir = getProjectDir(suite.T())
 	buildDir, err := os.MkdirTemp(suite.projectDir, "chrysopoeia-e2e-")
 	suite.Require().NoError(err)
 	suite.buildDir = buildDir
 	suite.T().Logf("Setting up E2E suite... projectDir=%s, buildDir=%s", suite.projectDir, suite.buildDir)
 
-	suite.isCertManagerAlreadyInstalled = isCertManagerCRDsInstalled(suite.T())
-	suite.isPrometheusOperatorAlreadyInstalled = isPrometheusOperatorCRDsInstalled(suite.T())
-	if !skipCertManagerInstall && !suite.isCertManagerAlreadyInstalled {
+	if !skipCertManagerInstall && !isCertManagerCRDsInstalled(suite.T()) {
 		installCertManager(suite.T())
 	}
-	if !suite.isPrometheusOperatorAlreadyInstalled {
+	if !isPrometheusOperatorCRDsInstalled(suite.T()) {
 		installPrometheusOperatorCRDs(suite.T())
 	}
 
 	suite.T().Log("Building and uploading manager image to kind cluster...")
 	buildAndUploadManagerImage(suite.T(), suite.projectDir, suite.buildDir)
+
+	suite.T().Log("Building and uploading test controller image to kind cluster...")
+	buildAndUploadTestControllerImage(suite.T(), suite.projectDir, suite.buildDir)
+
+	suite.T().Log("Installing OCI registry...")
+	suite.ociRegistryPort, suite.ociRegistryCert = installOCIRegistry(suite.T(), suite.client, suite.projectDir)
 
 	suite.T().Log("Installing controller manager...")
 	installControllerManager(suite.T(), suite.projectDir, suite.buildDir)
@@ -56,14 +78,6 @@ func (suite *E2ESuite) SetupSuite() {
 
 func (suite *E2ESuite) TearDownSuite() {
 	suite.T().Log("Tearing down E2E suite...")
-	if !skipCertManagerInstall && !suite.isCertManagerAlreadyInstalled {
-		suite.T().Log("Uninstalling CertManager...")
-		uninstallCertManager(suite.T())
-	}
-	if !suite.isPrometheusOperatorAlreadyInstalled {
-		suite.T().Log("Uninstalling Prometheus Operator CRDs...")
-		uninstallPrometheusOperatorCRDs(suite.T())
-	}
 
 	suite.T().Log("Removing build directory:", suite.buildDir)
 	suite.Require().NoError(os.RemoveAll(suite.buildDir))
