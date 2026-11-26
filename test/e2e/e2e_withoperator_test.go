@@ -278,6 +278,20 @@ spec:
 		exec.CommandContext(suite.T().Context(),
 			"kubectl", "wait", "-n", dep1ns, "tests.homunculus.helmetica.io", "test", "--for=jsonpath={.status.controllerId}=group1", "--timeout", "1m"),
 	)
+
+	suite.T().Log("Delete dependent (requires) claim...")
+	requireRun(suite.T(),
+		cmdWithJSONStdin(suite.T(), dependentClaim,
+			"kubectl", "delete", "-f", "-"),
+	)
+	requireRun(suite.T(),
+		cmdWithJSONStdin(suite.T(), dependentClaim,
+			"kubectl", "wait", "-f", "-", "--for=delete", "--timeout", "1m"),
+	)
+	requireRun(suite.T(),
+		cmdWithJSONStdin(suite.T(), dependentClaim,
+			"kubectl", "wait", "namespace", dep1ns, "--for=delete", "--timeout", "1m"),
+	)
 }
 
 func (suite *E2ESuite) requireApply(obj runtime.ApplyConfiguration, opts ...client.ApplyOption) {

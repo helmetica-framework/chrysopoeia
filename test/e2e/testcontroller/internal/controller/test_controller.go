@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,6 +30,8 @@ import (
 	homunculusv1 "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1"
 	homunculusv1ac "github.com/helmetica-framework/chrysopoeia/test/e2e/testcontroller/api/v1/applyconfiguration/api/v1"
 )
+
+const Finalizer = "homunculus.helmetica.io/cleanup"
 
 // TestReconciler reconciles a Test object
 type TestReconciler struct {
@@ -53,13 +56,29 @@ func (r *TestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get Test: %w", err)
 	}
+	if ti.DeletionTimestamp != nil && !ti.DeletionTimestamp.IsZero() {
+		time.Sleep(time.Second) // The home office work simulation :D
+		if err := r.Apply(ctx, acFromInstance(ti).WithFinalizers(), client.FieldOwner("test-finalizer-manager")); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch resource status: %w", err)
+		}
+		return ctrl.Result{}, nil
+	}
 
-	tac := homunculusv1ac.Test(req.Name, req.Namespace).WithStatus(homunculusv1ac.TestStatus().WithControllerID(r.ControllerId))
-	if err := r.Status().Apply(ctx, tac, client.FieldOwner("test-status-manager")); err != nil {
+	if err := r.Apply(ctx, acFromInstance(ti).WithFinalizers(Finalizer), client.FieldOwner("test-finalizer-manager")); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to patch resource status: %w", err)
+	}
+
+	if err := r.Status().Apply(ctx, acFromInstance(ti).WithStatus(homunculusv1ac.TestStatus().WithControllerID(r.ControllerId)), client.FieldOwner("test-status-manager")); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch resource status: %w", err)
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// acFromInstance returns an applyconfiguration from the given instance.
+// It sets the UID field to ensure the instance is not accidentally recreate because the cache has not yet caught up.
+func acFromInstance(i homunculusv1.Test) *homunculusv1ac.TestApplyConfiguration {
+	return homunculusv1ac.Test(i.Name, i.Namespace).WithUID(i.UID)
 }
 
 // SetupWithManager sets up the controller with the Manager.

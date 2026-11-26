@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/shlex"
 	"github.com/stretchr/testify/require"
@@ -46,8 +47,10 @@ const (
 func requireRun(t *testing.T, cmd *exec.Cmd) string {
 	t.Helper()
 
+	start := time.Now()
 	t.Log("Executing command:", fmt.Sprintf("(PWD=%s)", cmd.Dir), strings.Join(cmd.Args, " "))
 	output, err := cmd.CombinedOutput()
+	t.Log(fmt.Sprintf("  (PWD=%s)", cmd.Dir), strings.Join(cmd.Args, " "), "took", time.Since(start))
 	require.NoErrorf(t, err, "%q failed with error %q", strings.Join(cmd.Args, " "), string(output))
 	return string(output)
 }
