@@ -10,4 +10,5 @@
 
 .References
 * xref:references/configuration.adoc[references/configuration.adoc]
+* xref:references/values-hints.adoc[values.yaml hints]
 * xref:references/libraries.adoc[Go libraries]
