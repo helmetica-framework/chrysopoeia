@@ -1,0 +1,228 @@
+= values.yaml hints
+
+Chrysopoeia generates a claim CRD from a chart's `values.yaml`.
+Every value turns into a field of the CRD, and the type of the field is guessed from the default value.
+Guessing only goes so far.
+An empty list has nothing to guess from, and not every value should be settable by a user in the first place.
+Hints are how you correct that.
+
+A hint is a key that sits next to the value it describes, with the same name and a `+#+` in front.
+`+#+` starts a comment in YAML, so the key has to be quoted.
+
+Pure schema hints without a corresponding key are supported.
+Descriptions can be passed by using the `description` field of the hint.
+
+Using the `description` field can be useful to have full control over formatting and whitespace.
+
+.A hint next to its value
+[source,yaml]
+----
+'#replicas':
+  type: integer
+replicas:
+----
+
+Hints never reach the service.
+They are read while the CRD is generated and dropped afterwards, so the upstream chart never sees them.
+
+== Descriptions
+
+The comment above a key becomes the description of the field in the CRD.
+This needs no hint, it happens for every key that has a comment.
+Users read those descriptions with `kubectl explain`, so it's worth writing them.
+
+.Comments become descriptions
+[source,yaml]
+----
+# The hostname the service is reachable under.
+# Leave empty to disable ingress.
+ingressHostname: ""
+----
+
+[#hiding]
+== Hiding values
+
+`export: false` keeps a value out of the CRD.
+The value still applies, it just stops being something a user can set.
+This is how you pin things that must not be changed per instance, like K8up's backup annotations.
+
+Hiding is inherited.
+A hint on an object hides everything below it, and an `export: true` deeper down brings the field and all its fields below back.
+
+.Hiding a subtree and exposing one field again
+[source,yaml]
+----
+'#internal':
+  export: false <1>
+internal:
+  a:
+    b: ""       <2>
+  c:
+    '#d':
+      export: true <3>
+    d: ""
+----
+<1> Hides `internal` and everything under it.
+<2> Not settable, inherited from `internal`.
+<3> Settable again, the closest hint wins.
+
+If nothing under an object ends up exported, the object disappears from the CRD as well.
+
+== Types
+
+A value the generator can't read a type from is skipped, with a warning during generation.
+That happens for empty values and for `null`.
+Give those a `type` hint.
+Allowed types are `boolean`, `integer`, `number` and `string`.
+
+Values starting with `cel:` are computed per claim and are never part of the CRD.
+
+.Typing a value that has no default
+[source,yaml]
+----
+'#logLevel':
+  type: string
+logLevel:
+----
+
+.Value without a corresponding key
+[source,yaml]
+----
+'#logLevel':
+  type: integer
+  description: |
+    The log level of the service. Higher levels suppress more logs.
+----
+
+== Restricting values
+
+`enum` limits a field to a fixed set of values.
+The API server rejects anything else, so users get the error when they apply the claim instead of when the service fails to start.
+
+.A field with a fixed set of values
+[source,yaml]
+----
+'#logLevel':
+  type: string
+  enum: [debug, info, warn, error]
+logLevel:
+----
+
+== Empty lists and objects
+
+An empty list or object carries no type either.
+`items` and `properties` describe what goes inside.
+
+Use `items` for repeated things: the entries of a list, or the values of a map with keys you don't know upfront.
+The `+'#'+` key describes a scalar entry.
+
+.Lists and maps of scalars
+[source,yaml]
+----
+'#tags':
+  items:
+    '#':
+      type: string
+tags: [] <1>
+
+'#labels':
+  items:
+    '#':
+      type: string
+labels: {} <2>
+----
+<1> A list of strings.
+<2> A map with free-form keys and string values.
+
+For entries that are objects, describe their fields instead of using `+'#'+`.
+
+.A list of objects
+[source,yaml]
+----
+'#ports':
+  items:
+    # The name of the port.
+    '#name':
+      type: string
+    '#port':
+      type: integer
+ports: []
+----
+
+Use `properties` when the object has a fixed set of fields rather than free-form keys.
+
+.An object with known fields
+[source,yaml]
+----
+'#resources':
+  properties:
+    '#cpu':
+      type: string
+    '#memory':
+      type: string
+resources: {}
+----
+
+The shorter way to describe entries is to write an example entry instead of hints, which is often easier to read.
+
+.An example entry in place of hints
+[source,yaml]
+----
+'#ports':
+  items:
+    # The name of the port.
+    name: !!str
+    port: 0
+ports: []
+----
+
+== Limits
+
+`max_length`, `max_items` and `max_properties` cap a string, a list and a map.
+The API server enforces them, and they keep the cost of <<validation,validation rules>> within its budget.
+
+.Capping a string and a list
+[source,yaml]
+----
+'#tag':
+  max_length: 63
+tag: "1.0.0"
+
+'#endpoints':
+  max_items: 5
+endpoints: []
+----
+
+[#validation]
+== Validation rules
+
+`validation` adds https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#validation-rules[CEL validation rules] to a field.
+Each entry becomes one `x-kubernetes-validations` rule; `message_expression`, `reason`, `field_path` and `optional_old_self` map to their Kubernetes counterparts.
+
+.A rule on a field and one across fields
+[source,yaml]
+----
+'#replicas':
+  validation:
+    - rule: "self >= 1"
+      message: "replicas must be at least 1"
+replicas: 1
+
+'#database':
+  validation:
+    - rule: "self.mode != 'Manual' || has(self.replicas)"
+      message: "replicas is required when mode is Manual"
+      field_path: .replicas
+----
+
+A rule can also make a field immutable:
+
+[source,yaml]
+----
+'#tag':
+  validation:
+    - rule: "!oldSelf.hasValue() || self == oldSelf.value()"
+      message: "tag is immutable"
+      optional_old_self: true
+tag: "1.0.0"
+----
